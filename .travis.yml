@@ -1,0 +1,8 @@
+language: node_js
+node_js:
+  - "node"
+  - "6"
+before_script: # create a virtual screen in order to test on a browser (i.e. Firefox)
+  - "export DISPLAY=:99.0"
+  - "sh -e /etc/init.d/xvfb start"
+  - sleep 3 # give xvfb some time to start
