@@ -3,7 +3,7 @@ import { addChildAfterPrior, addChildBeforeFollower, isPriorOf, getFollowingProp
 import Proposition from './model/proposition';
 import ClauseItem from './model/clauseItem';
 import Relation from './model/relation';
-import IllegalActionError from './IllegalActionError';
+import IllegalActionError from './illegalActionError';
 
 /**
  * Subordinate the given target proposition under the specified parent and set its indentation function.

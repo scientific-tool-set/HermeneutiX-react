@@ -8,7 +8,7 @@ import Proposition from '../../src/pericope/model/proposition';
 import ClauseItem from '../../src/pericope/model/clauseItem';
 import RelationTemplate from '../../src/pericope/model/relationTemplate';
 import AssociateRole from '../../src/pericope/model/associateRole';
-import IllegalActionError from '../../src/pericope/IllegalActionError';
+import IllegalActionError from '../../src/pericope/illegalActionError';
 
 describe('ModelChanger', () => {
 	const language = new LanguageModel('SomeLanguage', true, [
