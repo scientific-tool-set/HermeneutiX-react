@@ -58,9 +58,11 @@ export default class Proposition {
 	}
 
 	set priorChildren(priorChildren) {
-		this[priorChildrenSymbol] = priorChildren;
-		priorChildren.filter(child => child.parent !== this).forEach(child => {
-			child.parent = this;
+		this[priorChildrenSymbol] = List(priorChildren);
+		this[priorChildrenSymbol].forEach(child => {
+			if (child.parent !== this) {
+				child.parent = this;
+			}
 		});
 	}
 
@@ -69,9 +71,11 @@ export default class Proposition {
 	}
 
 	set laterChildren(laterChildren) {
-		this[laterChildrenSymbol] = laterChildren;
-		laterChildren.filter(child => child.parent !== this).forEach(child => {
-			child.parent = this;
+		this[laterChildrenSymbol] = List(laterChildren);
+		this[laterChildrenSymbol].forEach(child => {
+			if (child.parent !== this) {
+				child.parent = this;
+			}
 		});
 	}
 

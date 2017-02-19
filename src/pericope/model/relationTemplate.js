@@ -35,6 +35,9 @@ export default class RelationTemplate {
 		if (associateCount < 2 || associateCount > 2 && !this.canHaveMoreThanTwoAssociates) {
 			throw new Error('invalid number of associates for relation: ' + associateCount);
 		}
-		return List.of(this.leadingAssociate).concat(Repeat(this.repetitiveAssociate, associateCount - 2), this.trailingAssociate);
+		return List.of(
+				this.leadingAssociate,
+				...Repeat(this.repetitiveAssociate, associateCount - 2),
+				this.trailingAssociate);
 	}
 }

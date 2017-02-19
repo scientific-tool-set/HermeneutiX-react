@@ -31,7 +31,7 @@ export function indentPropositionUnderParent(target, parent, syntacticFunction) 
 	} while (parentPart);
 	if (oldParent === parent.parent) {
 		// target and designated parent have the same parent
-		const targetSiblings = getContainingListInParent(oldParent, target).list;
+		const targetSiblings = getContainingListInParent(oldParent, target).value;
 		const targetIndex = targetSiblings.indexOf(target);
 		const parentIndex = targetSiblings.indexOf(parent);
 		if (parentIndex === -1 || Math.abs(targetIndex - parentIndex) !== 1) {
@@ -133,7 +133,7 @@ export function mergePropositions(propOne, propTwo) {
 		// given propositions are not connected and cannot be merged
 		throw new IllegalActionError('Error.MergePropositions');
 	}
-	const siblings = getContainingListInParent(parent, prop1).list;
+	const siblings = getContainingListInParent(parent, prop1).value;
 	if (!siblings.includes(prop2)) {
 		// the propositions are on different sides of their common parent
 		throw new IllegalActionError('Error.MergePropositions');
@@ -197,11 +197,15 @@ function mergeConnectedPropositions(propOnePart, propTwoPart) {
 		const otherLaterChildren = propOnePart.laterChildren.shift();
 		mergeConnectedPropositionAttributes(propOnePart, propTwoPart);
 		// reinsert any other later children propOne had before being merged
-		propOnePart.laterChildren = propOnePart.laterChildren.concat(otherLaterChildren);
+		propOnePart.laterChildren = List.of(
+				...propOnePart.laterChildren,
+				...otherLaterChildren);
 	} else if (propOnePart.parent === propTwoPart) {
 		// propOne is the trailing prior child of propTwo
 		// transfer any other prior children of propTwo to the front of propOne's prior children
-		propOnePart.priorChildren = propTwoPart.priorChildren.butLast().concat(propOnePart.priorChildren);
+		propOnePart.priorChildren = List.of(
+				...propTwoPart.priorChildren.butLast(),
+				...propOnePart.priorChildren);
 		if (propTwoPart.partBeforeArrow) {
 			// propOne is the last enclosed child but not the only one, transfer propTwo's partBeforeArrow
 			propTwoPart.partBeforeArrow.partAfterArrow = propOnePart;
@@ -236,7 +240,9 @@ function mergeConnectedPropositions(propOnePart, propTwoPart) {
 			// re-instate the combined proposition as the partAfterArrow instead of the former proptwo,
 			// as propOne was an enclosed child that was indented under another enclosed child of propTwo and its partBeforeArrow
 			removeChild(propOnePart.parent, propOnePart);
-			propOnePart.priorChildren = propTwoPart.priorChildren.concat(propOnePart.priorChildren);
+			propOnePart.priorChildren = List.of(
+					...propTwoPart.priorChildren,
+					...propOnePart.priorChildren);
 			propOnePart.syntacticFunction = null;
 			propTwoPartBeforeArrow.partAfterArrow = propOnePart;
 		}
@@ -250,7 +256,9 @@ function mergeConnectedPropositions(propOnePart, propTwoPart) {
  * @returns {void}
  */
 function mergeConnectedPropositionAttributes(propOne, propTwo) {
-	propOne.clauseItems = propOne.clauseItems.concat(propTwo.clauseItems);
+	propOne.clauseItems = List.of(
+			...propOne.clauseItems,
+			...propTwo.clauseItems);
 	if (!propOne.label || propOne.label.length === 0) {
 		propOne.label = propTwo.label;
 	}
@@ -285,17 +293,23 @@ function mergePropositionsWithEnclosedChildren(propOnePart, propTwoPart) {
 	}
 	// handle enclosed intermediate propositions on the same level
 	const siblings = getContainingListInParent(propOnePart.parent, propOnePart);
-	const propOnePartIndex = siblings.list.indexOf(propOnePart);
-	const propTwoPartIndex = siblings.list.indexOf(propTwoPart);
-	const newEnclosedChildren = siblings.list.slice(propOnePartIndex + 1, propTwoPartIndex);
+	const propOnePartIndex = siblings.value.indexOf(propOnePart);
+	const propTwoPartIndex = siblings.value.indexOf(propTwoPart);
+	const newEnclosedChildren = siblings.value.slice(propOnePartIndex + 1, propTwoPartIndex);
 	// removed enclosed children from the list of siblings
-	siblings.list = siblings.list.slice(0, propOnePartIndex + 1).concat(siblings.list.slice(propTwoPartIndex));
+	siblings.value = List.of(
+			...siblings.value.slice(0, propOnePartIndex + 1),
+			...siblings.value.slice(propTwoPartIndex));
 	// subordinate enclosed propositions to secondPart
-	propTwoPart.priorChildren = newEnclosedChildren.concat(propTwoPart.priorChildren);
+	propTwoPart.priorChildren = List.of(
+			...newEnclosedChildren,
+			...propTwoPart.priorChildren);
 	const lastPropOnePart = propOnePart.lastPart;
 	// a partBeforeArrow shouldn't have any laterChildren, only the respective partAfterArrow should have priorChildren
 	if (!lastPropOnePart.laterChildren.isEmpty()) {
-		propTwoPart.priorChildren = lastPropOnePart.laterChildren.concat(propTwoPart.priorChildren);
+		propTwoPart.priorChildren = List.of(
+				...lastPropOnePart.laterChildren,
+				...propTwoPart.priorChildren);
 		lastPropOnePart.laterChildren = List();
 	}
 	// remove propTwoPart as independent proposition and make it the propOnePart's last partAfterArrow
@@ -550,33 +564,27 @@ export function alterRelationType(relation, template) {
 }
 
 /**
- * Add the specified origin text as new propositions
- * in front of the existing ones on the given pericope.
+ * Add the specified origin text as new propositions in front of the existing ones on the given pericope.
  * @param {Pericope} pericope - pericope to prepend origin text to
  * @param {string} originText - origin text to prepend
  * @returns {void}
  */
 export function prependText(pericope, originText) {
-	const propositionsToPrepend = buildPropositionsFromText(originText);
-	propositionsToPrepend.forEach(proposition => {
-		proposition.parent = pericope;
-	});
-	pericope.text = propositionsToPrepend.concat(pericope.text);
+	pericope.text = List.of(
+			...buildPropositionsFromText(originText),
+			...pericope.text);
 }
 
 /**
- * Add the specified origin text as new propositions
- * behind the existing ones on the given pericope.
+ * Add the specified origin text as new propositions behind the existing ones on the given pericope.
  * @param {Pericope} pericope - pericope to append origin text to
  * @param {string} originText - origin text to append
  * @returns {void}
  */
 export function appendText(pericope, originText) {
-	const propositionsToAppend = buildPropositionsFromText(originText);
-	propositionsToAppend.forEach(proposition => {
-		proposition.parent = pericope;
-	});
-	pericope.text = pericope.text.concat(propositionsToAppend);
+	pericope.text = List.of(
+			...pericope.text,
+			...buildPropositionsFromText(originText));
 }
 
 /**

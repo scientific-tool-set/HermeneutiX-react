@@ -1,5 +1,7 @@
 import { List } from 'immutable';
 
+const textSymbol = Symbol('text');
+
 export default class Pericope {
 	/**
 	 * @constructor
@@ -7,12 +9,22 @@ export default class Pericope {
 	 * @param {LanguageModel} language - origin text's language
 	 */
 	constructor(text, language) {
-		this.text = List(text);
-		this.text.forEach(proposition => {
-			proposition.parent = this;
-		});
+		this.text = text;
 		this.language = language;
 
 		Object.seal(this);
+	}
+
+	get text() {
+		return this[textSymbol];
+	}
+
+	set text(text) {
+		this[textSymbol] = List(text);
+		this[textSymbol].forEach(proposition => {
+			if (proposition.parent !== this) {
+				proposition.parent = this;
+			}
+		});
 	}
 }

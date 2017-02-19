@@ -1,8 +1,7 @@
-import { List, Seq } from 'immutable';
-
+import { Map, List, Seq } from 'immutable';
+import PropertyAccessor from './propertyAccessor';
 import Proposition from './model/proposition';
 import ClauseItem from './model/clauseItem';
-import ListAccessor from './model/listAccessor';
 
 /**
  * Construct the representing propositions from the given text.
@@ -29,6 +28,7 @@ export function buildPropositionsFromText(originText) {
  * @returns {Seq<Proposition>} all contained propositions in the origin text order
  */
 export function getFlatText(pericope) {
+	// use a lazy Seq in order to avoid having to build the whole model as flat list if not necessary
 	return Seq(pericope.text).flatMap(flattenProposition);
 }
 
@@ -38,6 +38,7 @@ export function getFlatText(pericope) {
  * @returns {Seq<Proposition>} flat representation of the proposition's subtree
  */
 function flattenProposition(proposition) {
+	// use lazy Seqs in order to avoid having to build the whole model as flat list if not necessary
 	return Seq(proposition.priorChildren).flatMap(flattenProposition).concat(
 			proposition,
 			Seq(proposition.laterChildren).flatMap(flattenProposition),
@@ -51,22 +52,22 @@ function flattenProposition(proposition) {
  * If the parent is a proposition itself, the containing list is either the priorChildren, laterChildren, or one of these two on a partAfterArrow.
  * @param {Pericope|Proposition} parent - parent element to find list of children containing the given one
  * @param {Proposition} childProposition - child proposition to find containing list in parent for
- * @returns {ListAccessor|null} wrapper allowing read and write access to the list of child propositions
+ * @returns {PropertyAccessor|null} wrapper allowing read and write access to the list of child propositions
  */
 export function getContainingListInParent(parent, childProposition) {
 	if (parent instanceof Proposition) {
 		let part = parent;
 		do {
 			if (part.priorChildren.includes(childProposition)) {
-				return new ListAccessor(part, 'priorChildren');
+				return new PropertyAccessor(part, 'priorChildren');
 			}
 			if (part.laterChildren.includes(childProposition)) {
-				return new ListAccessor(part, 'laterChildren');
+				return new PropertyAccessor(part, 'laterChildren');
 			}
 			part = part.partAfterArrow;
 		} while (part);
 	} else if (parent.text.includes(childProposition)) {
-		return new ListAccessor(parent, 'text');
+		return new PropertyAccessor(parent, 'text');
 	}
 	return null;
 }
@@ -82,8 +83,7 @@ export function getContainingListInParent(parent, childProposition) {
 export function addChildBeforeFollower(parent, childToAdd, followerProposition) {
 	const followerMainPart = followerProposition.firstPart;
 	const children = getContainingListInParent(parent, followerMainPart);
-	children.list = children.list.insert(children.list.indexOf(followerMainPart), childToAdd);
-	childToAdd.parent = followerMainPart.parent;
+	children.value = children.value.insert(children.value.indexOf(followerMainPart), childToAdd);
 	if (!(parent instanceof Proposition)) {
 		// clear the now top level proposition's indentation function
 		childToAdd.syntacticFunction = null;
@@ -101,8 +101,7 @@ export function addChildBeforeFollower(parent, childToAdd, followerProposition) 
 export function addChildAfterPrior(parent, childToAdd, priorProposition) {
 	const priorMainPart = priorProposition.firstPart;
 	const children = getContainingListInParent(parent, priorMainPart);
-	children.list = children.list.insert(children.list.indexOf(priorMainPart) + 1, childToAdd);
-	childToAdd.parent = priorMainPart.parent;
+	children.value = children.value.insert(children.value.indexOf(priorMainPart) + 1, childToAdd);
 	if (!(parent instanceof Proposition)) {
 		// clear the now top level proposition's indentation function
 		childToAdd.syntacticFunction = null;
@@ -119,7 +118,7 @@ export function removeChild(parent, childToRemove) {
 	const children = getContainingListInParent(parent, childToRemove);
 	if (children) {
 		// given proposition is an actual child (including partAfterArrows)
-		children.list = children.list.remove(children.list.indexOf(childToRemove));
+		children.value = children.value.remove(children.value.indexOf(childToRemove));
 	} else if (childToRemove.partBeforeArrow) {
 		// given proposition is a partAfterArrow, just remove it from its counter part
 		childToRemove.partBeforeArrow.partAfterArrow = null;
@@ -130,6 +129,7 @@ export function removeChild(parent, childToRemove) {
 
 /**
  * Destroy the given relation and all super ordinated relations, thereby also cleaning up any back references from its associates.
+ * @param {Relation} relation - relation to remove
  * @returns {void}
  */
 export function removeRelation(relation) {
@@ -256,7 +256,7 @@ export function getFollowingPropositionOnSameOrHigherLevel(priorProposition, ski
 	}
 	const parent = priorProposition.parent;
 	const referenceProposition = priorProposition.firstPart;
-	const siblings = getContainingListInParent(parent, referenceProposition).list;
+	const siblings = getContainingListInParent(parent, referenceProposition).value;
 	const followingSiblingIndex = siblings.indexOf(referenceProposition) + 1;
 	if (followingSiblingIndex < siblings.size) {
 		return siblings.get(followingSiblingIndex);
