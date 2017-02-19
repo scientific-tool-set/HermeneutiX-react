@@ -1,7 +1,8 @@
-import { List } from 'immutable';
+import { List, Seq } from 'immutable';
 
 import Proposition from './model/proposition';
 import ClauseItem from './model/clauseItem';
+import ListAccessor from './model/listAccessor';
 
 /**
  * Construct the representing propositions from the given text.
@@ -23,6 +24,54 @@ export function buildPropositionsFromText(originText) {
 }
 
 /**
+ * Build a flat list of all propositions (including partAfterArrows) contained in the given pericope in the origin text order.
+ * @param {Pericope} pericope - pericope for which to construct the flattened proposition list
+ * @returns {Seq<Proposition>} all contained propositions in the origin text order
+ */
+export function getFlatText(pericope) {
+	return Seq(pericope.text).flatMap(flattenProposition);
+}
+
+/**
+ * Build a flat list of the given proposition and all its subordinated child propositions (including their partAfterArrows) in the origin text order.
+ * @param {Proposition} proposition - proposition to build flat sequence representing its hierarchical structure for
+ * @returns {Seq<Proposition>} flat representation of the proposition's subtree
+ */
+function flattenProposition(proposition) {
+	return Seq(proposition.priorChildren).flatMap(flattenProposition).concat(
+			proposition,
+			Seq(proposition.laterChildren).flatMap(flattenProposition),
+			proposition.partAfterArrow ? flattenProposition(proposition.partAfterArrow) : List()
+			);
+}
+
+/**
+ * Find the list of child propositions containing the given one and return an accessor (i.e. a wrapper allowing mutation) for it.
+ * If the parent is the pericope the given child proposition would have to be a top level proposition in the pericope's text list.
+ * If the parent is a proposition itself, the containing list is either the priorChildren, laterChildren, or one of these two on a partAfterArrow.
+ * @param {Pericope|Proposition} parent - parent element to find list of children containing the given one
+ * @param {Proposition} childProposition - child proposition to find containing list in parent for
+ * @returns {ListAccessor|null} wrapper allowing read and write access to the list of child propositions
+ */
+export function getContainingListInParent(parent, childProposition) {
+	if (parent instanceof Proposition) {
+		let part = parent;
+		do {
+			if (part.priorChildren.includes(childProposition)) {
+				return new ListAccessor(part, 'priorChildren');
+			}
+			if (part.laterChildren.includes(childProposition)) {
+				return new ListAccessor(part, 'laterChildren');
+			}
+			part = part.partAfterArrow;
+		} while (part);
+	} else if (parent.text.includes(childProposition)) {
+		return new ListAccessor(parent, 'text');
+	}
+	return null;
+}
+
+/**
  * Under the given pericope or proposition (or one of its partAfterArrows),
  * insert the provided child propostion in front of the specified other subordinated proposition.
  * @param {(Pericope|Proposition)} parent - parent element to add child proposition to
@@ -32,8 +81,9 @@ export function buildPropositionsFromText(originText) {
  */
 export function addChildBeforeFollower(parent, childToAdd, followerProposition) {
 	const followerMainPart = followerProposition.firstPart;
-	const children = parent.getContainingListWithSetter(followerMainPart);
-	children.setter(children.list.insert(children.list.indexOf(followerMainPart), childToAdd));
+	const children = getContainingListInParent(parent, followerMainPart);
+	children.list = children.list.insert(children.list.indexOf(followerMainPart), childToAdd);
+	childToAdd.parent = followerMainPart.parent;
 	if (!(parent instanceof Proposition)) {
 		// clear the now top level proposition's indentation function
 		childToAdd.syntacticFunction = null;
@@ -50,8 +100,9 @@ export function addChildBeforeFollower(parent, childToAdd, followerProposition) 
  */
 export function addChildAfterPrior(parent, childToAdd, priorProposition) {
 	const priorMainPart = priorProposition.firstPart;
-	const children = parent.getContainingListWithSetter(priorMainPart);
-	children.setter(children.list.insert(children.list.indexOf(priorMainPart) + 1, childToAdd));
+	const children = getContainingListInParent(parent, priorMainPart);
+	children.list = children.list.insert(children.list.indexOf(priorMainPart) + 1, childToAdd);
+	childToAdd.parent = priorMainPart.parent;
 	if (!(parent instanceof Proposition)) {
 		// clear the now top level proposition's indentation function
 		childToAdd.syntacticFunction = null;
@@ -59,30 +110,68 @@ export function addChildAfterPrior(parent, childToAdd, priorProposition) {
 }
 
 /**
+ * Remove the given subordinated child proposition from this one (or one of its partAfterArrows).
+ * @param {Pericope|Proposition} parent - parent element the child proposition should be removed from
+ * @param {Proposition} childToRemove - proposition to remove from the list of subordinated children
+ * @returns {void}
+ */
+export function removeChild(parent, childToRemove) {
+	const children = getContainingListInParent(parent, childToRemove);
+	if (children) {
+		// given proposition is an actual child (including partAfterArrows)
+		children.list = children.list.remove(children.list.indexOf(childToRemove));
+	} else if (childToRemove.partBeforeArrow) {
+		// given proposition is a partAfterArrow, just remove it from its counter part
+		childToRemove.partBeforeArrow.partAfterArrow = null;
+	} else {
+		throw new Error(`Could not remove given proposition as it could not be found: ${childToRemove}`);
+	}
+}
+
+/**
+ * Destroy the given relation and all super ordinated relations, thereby also cleaning up any back references from its associates.
+ * @returns {void}
+ */
+export function removeRelation(relation) {
+	let superOrdinatedRelation = relation;
+	do {
+		// reset subordinated relations/propositions to belong to no relation
+		superOrdinatedRelation.associates.forEach(associate => {
+			associate.superOrdinatedRelation = null;
+			associate.role = null;
+		});
+		superOrdinatedRelation = superOrdinatedRelation.superOrdinatedRelation;
+	} while (superOrdinatedRelation);
+}
+
+/**
  * Check whether the given proposition/relation is immediately preceding the given other proposition/relation.
- * @param {Pericope} pericope - overall model for determining the propositions' parents
  * @param {(Relation|Proposition)} reference - leading element
  * @param {(Relation|Proposition)} follower - trailing element
  * @param {boolean} [onlyConnectables=false] - whether to skip over proposition parts that cannot be associated with a relation
  * @returns {boolean} whether no other propositions are between
  */
-export function isPriorOf(pericope, reference, follower, onlyConnectables = false) {
-	// if the given follower is a relation, retrieve its first contained proposition
-	const followerProposition = follower instanceof Proposition ? follower : follower.firstContainedProposition;
-	return getFollowingProposition(pericope, reference, onlyConnectables) === followerProposition;
+export function isPriorOf(reference, follower, onlyConnectables = false) {
+	let followerProposition = follower;
+	while (followerProposition.associates) {
+		// given follower is a relation, retrieve its first contained proposition
+		followerProposition = followerProposition.associates.first();
+	}
+	return getFollowingProposition(reference, onlyConnectables) === followerProposition;
 }
 
 /**
  * Find the immediately following proposition of the given proposition/relation in the origin text.
- * @param {Pericope} pericope - overall model for determining the propositions' parents
  * @param {(Relation|Proposition)} reference - prior element
  * @param {boolean} [onlyConnectables=false] - whether to skip over proposition parts that cannot be associated with a relation
  * @returns {?Proposition} next proposition
  */
-export function getFollowingProposition(pericope, reference, onlyConnectables = false) {
-	// if this is a relation, retrieve the last contained proposition
-	const referenceProposition = reference instanceof Proposition ? reference : reference.lastContainedProposition;
-
+export function getFollowingProposition(reference, onlyConnectables = false) {
+	let referenceProposition = reference;
+	while (referenceProposition.associates) {
+		// given reference is a relation, retrieve the last contained proposition
+		referenceProposition = referenceProposition.associates.last();
+	}
 	let followingChildren = referenceProposition.laterChildren;
 	if (followingChildren.isEmpty()) {
 		// reference proposition does not have later children
@@ -94,7 +183,7 @@ export function getFollowingProposition(pericope, reference, onlyConnectables = 
 			}
 		} else {
 			// reference proposition does not have a partAfterArrow
-			return getFollowingPropositionDisregardingPriorsChildren(pericope, referenceProposition, onlyConnectables);
+			return getFollowingPropositionDisregardingPriorsChildren(referenceProposition, onlyConnectables);
 		}
 	}
 	let follower;
@@ -109,26 +198,24 @@ export function getFollowingProposition(pericope, reference, onlyConnectables = 
 /**
  * Find the immediately following proposition on the same or higher level of the given prior proposition,
  * disregarding the prior proposition's own later children.
- * @param {Pericope} pericope - overall model for determining the propositions' parents
  * @param {Proposition} reference - prior proposition
  * @param {boolean} [onlyConnectables=false] - whether to skip over proposition parts that cannot be associated with a relation
  * @returns {?Proposition} next proposition
  */
-function getFollowingPropositionDisregardingPriorsChildren(pericope, reference, onlyConnectables = false) {
-	let followingProposition = getFollowingPropositionOnSameOrHigherLevel(pericope, reference, onlyConnectables);
+function getFollowingPropositionDisregardingPriorsChildren(reference, onlyConnectables = false) {
+	let followingProposition = getFollowingPropositionOnSameOrHigherLevel(reference, onlyConnectables);
 	if (!followingProposition) {
 		// reference proposition is the last on this model, i.e. there is no following one
 		return null;
 	}
 	let referenceParent = reference;
-	while (!pericope.isParentOf(referenceParent)) {
-		const referenceGrandParent = pericope.getDirectParent(referenceParent);
-		const children = referenceGrandParent.laterChildren;
+	while (referenceParent.parent instanceof Proposition) {
+		const children = referenceParent.parent.laterChildren;
 		if (children.isEmpty() || referenceParent !== children.last()) {
 			break;
 		}
 		// prior proposition is the last later child of its parent, check parent's parent
-		referenceParent = referenceGrandParent;
+		referenceParent = referenceParent.parent;
 	}
 	// find the very first of the following propositions
 	let followersPriorChildren = followingProposition.priorChildren;
@@ -159,35 +246,33 @@ function getFollowingPropositionDisregardingPriorsChildren(pericope, reference, 
 
 /**
  * Find the following proposition in the origin text, skipping any child propositions in between.
- * @param {Pericope} pericope - overall model for determining the propositions' parents
  * @param {Proposition} priorProposition - reference proposition to find the following proposition for
  * @param {boolean} [skipPartAfterArrows=false] - whether to skip over proposition parts that cannot be associated with a relation
  * @returns {?Proposition} next proposition in origin text
  */
-export function getFollowingPropositionOnSameOrHigherLevel(pericope, priorProposition, skipPartAfterArrows = false) {
+export function getFollowingPropositionOnSameOrHigherLevel(priorProposition, skipPartAfterArrows = false) {
 	if (!skipPartAfterArrows && priorProposition.partAfterArrow) {
 		return priorProposition.partAfterArrow;
 	}
-	const parent = pericope.getDirectParent(priorProposition);
+	const parent = priorProposition.parent;
 	const referenceProposition = priorProposition.firstPart;
-	const siblings = parent.getContainingList(referenceProposition);
+	const siblings = getContainingListInParent(parent, referenceProposition).list;
 	const followingSiblingIndex = siblings.indexOf(referenceProposition) + 1;
 	if (followingSiblingIndex < siblings.size) {
 		return siblings.get(followingSiblingIndex);
 	}
 	// priorProposition got no following sibling, check on a higher level
-	return getFollowingPropositionOnHigherLevel(pericope, referenceProposition, skipPartAfterArrows);
+	return getFollowingPropositionOnHigherLevel(referenceProposition, skipPartAfterArrows);
 }
 
 /**
  * Find the following proposition in the origin text, skipping any child or sibling propositions in between.
- * @param {Pericope} pericope - overall model for determining the propositions' parents
  * @param {Proposition} priorProposition - reference proposition to find the following proposition for
  * @param {boolean} [skipPartAfterArrows=false] - whether to skip over proposition parts that cannot be associated with a relation
  * @returns {?Proposition} next proposition in origin text
  */
-function getFollowingPropositionOnHigherLevel(pericope, priorProposition, skipPartAfterArrows = false) {
-	const parent = pericope.getDirectParent(priorProposition);
+function getFollowingPropositionOnHigherLevel(priorProposition, skipPartAfterArrows = false) {
+	const parent = priorProposition.parent;
 	if (!(parent instanceof Proposition)) {
 		// priorProposition is the last top lovel proposition in the pericope
 		return null;
@@ -225,5 +310,5 @@ function getFollowingPropositionOnHigherLevel(pericope, priorProposition, skipPa
 		}
 	}
 	// no (more) proposition parts, prior's follower is the parent's follower
-	return getFollowingPropositionOnSameOrHigherLevel(pericope, parent, skipPartAfterArrows);
+	return getFollowingPropositionOnSameOrHigherLevel(parent, skipPartAfterArrows);
 }

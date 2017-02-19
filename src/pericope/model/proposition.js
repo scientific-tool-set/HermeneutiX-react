@@ -1,7 +1,10 @@
-import { List, Seq } from 'immutable';
+import { List } from 'immutable';
 
+const parentSymbol = Symbol('parent');
 const partBeforeArrowSymbol = Symbol('partBeforeArrow');
 const partAfterArrowSymbol = Symbol('partAfterArrow');
+const priorChildrenSymbol = Symbol('priorChildren');
+const laterChildrenSymbol = Symbol('laterChildren');
 
 export default class Proposition {
 	/**
@@ -15,17 +18,61 @@ export default class Proposition {
 		this.syntacticFunction = null;
 		this.syntacticTranslation = '';
 		this.clauseItems = List(clauseItems);
+		this[parentSymbol] = null;
 
 		this.superOrdinatedRelation = null;
 		this.role = null;
 		this.semanticTranslation = '';
 
-		this.priorChildren = List();
-		this.laterChildren = List();
+		this[priorChildrenSymbol] = List();
+		this[laterChildrenSymbol] = List();
 		this[partBeforeArrowSymbol] = null;
 		this[partAfterArrowSymbol] = null;
 
 		Object.seal(this);
+	}
+
+	/**
+	 * @returns {Pericope|Propostion} superordinated model element
+	 */
+	get parent() {
+		return this[parentSymbol];
+	}
+
+	/**
+	 * @param {Pericope|Proposition} parent - superordinated model element
+	 */
+	set parent(parent) {
+		const firstPart = this.firstPart;
+		if (firstPart.parent !== parent) {
+			let singlePart = firstPart;
+			do {
+				singlePart[parentSymbol] = parent;
+				singlePart = singlePart.partAfterArrow;
+			} while (singlePart);
+		}
+	}
+
+	get priorChildren() {
+		return this[priorChildrenSymbol];
+	}
+
+	set priorChildren(priorChildren) {
+		this[priorChildrenSymbol] = priorChildren;
+		priorChildren.filter(child => child.parent !== this).forEach(child => {
+			child.parent = this;
+		});
+	}
+
+	get laterChildren() {
+		return this[laterChildrenSymbol];
+	}
+
+	set laterChildren(laterChildren) {
+		this[laterChildrenSymbol] = laterChildren;
+		laterChildren.filter(child => child.parent !== this).forEach(child => {
+			child.parent = this;
+		});
 	}
 
 	/**
@@ -50,6 +97,7 @@ export default class Proposition {
 		if (partAfterArrow) {
 			// set the back reference on the following part
 			partAfterArrow[partBeforeArrowSymbol] = this;
+			partAfterArrow.parent = this.parent;
 		} else if (this.partAfterArrow) {
 			// clear the back reference on the previously following part
 			this.partAfterArrow[partBeforeArrowSymbol] = null;
@@ -77,123 +125,6 @@ export default class Proposition {
 			result = result.partAfterArrow;
 		}
 		return result;
-	}
-
-	get allParts() {
-		let allParts = List.of(this);
-		if (this.partAfterArrow) {
-			allParts = allParts.withMutations(list => {
-				let part = this.partAfterArrow;
-				while (part) {
-					list.push(part);
-					part = part.partAfterArrow;
-				}
-			});
-		}
-		return allParts;
-	}
-
-	/**
-	 * @param {Proposition} child - child proposition to check for
-	 * @returns {boolean} whether the given proposition is a subordinated child of this proposition
-	 */
-	isParentOf(child) {
-		return Seq(this.priorChildren).concat(this.laterChildren).flatMap(proposition => proposition.allParts).includes(child);
-	}
-
-	/**
-	 * Find the list of child propositions containing the given one.
-	 * This might be either the priorChildren, laterChildren, or one of the former two on a partAfterArrow.
-	 * @param {Proposition} childProposition - subordinated element to find containing list for
-	 * @returns {List<Proposition>|undefined} list of child propositions containing the given childProposition
-	 */
-	getContainingList(childProposition) {
-		let part = this;
-		do {
-			if (part.priorChildren.includes(childProposition)) {
-				return part.priorChildren;
-			}
-			if (part.laterChildren.includes(childProposition)) {
-				return part.laterChildren;
-			}
-			part = part.partAfterArrow;
-		} while (part);
-		return null;
-	}
-
-	/**
-	 * Find the list of child propositions containing the given one and the corresponding setter function (with a single List<Proposition> parameter).
-	 * This might be either the priorChildren, laterChildren, or one of the former two on a partAfterArrow.
-	 * @param {Proposition} childProposition - subordinated element to find containing list for
-	 * @returns {{list: List<Proposition>, setter: function}|undefined} list of child propositions containing the given childProposition
-	 */
-	getContainingListWithSetter(childProposition) {
-		const getPriorChildrenWithSetter = proposition => {
-			return {
-				list: proposition.priorChildren,
-				setter: newList => {
-					proposition.priorChildren = newList;
-				}
-			};
-		};
-		const getLaterChildrenWithSetter = proposition => {
-			return {
-				list: proposition.laterChildren,
-				setter: newList => {
-					proposition.laterChildren = newList;
-				}
-			};
-		};
-		let part = this;
-		do {
-			if (part.priorChildren.includes(childProposition)) {
-				return getPriorChildrenWithSetter(part);
-			}
-			if (part.laterChildren.includes(childProposition)) {
-				return getLaterChildrenWithSetter(part);
-			}
-			part = part.partAfterArrow;
-		} while (part);
-		return null;
-	}
-
-	/**
-	 * Remove the given subordinated child proposition from this one (or one of its partAfterArrows).
-	 * @param {Proposition} childToRemove - proposition to remove from the list of subordinated children
-	 * @returns {void}
-	 */
-	removeChild(childToRemove) {
-		const children = this.getContainingListWithSetter(childToRemove);
-		if (children) {
-			// given proposition is an actual child (including partAfterArrows)
-			children.setter(children.list.remove(children.list.indexOf(childToRemove)));
-		} else if (childToRemove.partBeforeArrow) {
-			// given proposition is a partAfterArrow, just remove it from its counter part
-			childToRemove.partBeforeArrow.partAfterArrow = null;
-		} else {
-			throw new Error(`Could not remove given proposition as it could not be found: ${childToRemove}`);
-		}
-	}
-
-	/**
-	 * Insert the provided clause item behind the other specified clause item.
-	 * @param {ClauseItem} itemToAdd - clause item to add behind priorItem
-	 * @param {ClauseItem} priorItem - existing clause item designated to preceed the new clause item
-	 * @returns {void}
-	 */
-	addClauseItemAfterPrior(itemToAdd, priorItem) {
-		this.clauseItems = this.clauseItems.insert(this.clauseItems.indexOf(priorItem) + 1, itemToAdd);
-	}
-
-	/**
-	 * Remove all specified clause items.
-	 * @param {ClauseItem[]} itemsToRemove - clause items to remove
-	 * @returns {void}
-	 */
-	removeClauseItems(itemsToRemove) {
-		itemsToRemove.forEach(item => {
-			this.clauseItems = this.clauseItems.remove(this.clauseItems.indexOf(item));
-		});
 	}
 
 	toString() {

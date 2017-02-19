@@ -34,45 +34,6 @@ export default class Relation {
 		return 1 + associateRelations.map(associate => associate.treeDepth).max();
 	}
 
-	/**
-	 * @returns {Proposition} very first proposition (in origin text order) contained in this relation sub tree
-	 */
-	get firstContainedProposition() {
-		let firstAssociate = this;
-		do {
-			firstAssociate = firstAssociate.associates.first();
-		} while (firstAssociate.associates);
-		return firstAssociate;
-	}
-
-	/**
-	 * @returns {Proposition} very last proposition (in origin text order) contained in this relation sub tree
-	 */
-	get lastContainedProposition() {
-		let lastAssociate = this;
-		do {
-			lastAssociate = lastAssociate.associates.last();
-		} while (lastAssociate.associates);
-		return lastAssociate;
-	}
-
-	/**
-	 * Destroy this relation and all super ordinated relations,
-	 * thereby also cleaning up any back references from its (now former) associates.
-	 * @returns {void}
-	 */
-	kill() {
-		if (this.superOrdinatedRelation) {
-			// recursively kill super ordinated relation
-			this.superOrdinatedRelation.kill();
-		}
-		// reset subordinated relations/propositions to belong to no relation
-		this.associates.forEach(associate => {
-			associate.superOrdinatedRelation = null;
-			associate.role = null;
-		});
-	}
-
 	toString() {
 		return `Relation(${this.associates.toJS()})`;
 	}
