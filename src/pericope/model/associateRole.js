@@ -1,3 +1,6 @@
+/**
+ * Role (described by a title and high or low weight) of an associate (Proposition|Relation) in a superordinated Relation.
+ */
 export default class AssociateRole {
 	/**
 	 * @constructor
@@ -7,5 +10,7 @@ export default class AssociateRole {
 	constructor(role, highWeight) {
 		this.role = role;
 		this.highWeight = highWeight;
+
+		Object.freeze(this);
 	}
 }

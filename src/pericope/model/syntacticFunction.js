@@ -11,5 +11,7 @@ export default class SyntacticFunction {
 		this.name = name;
 		this.underlined = underlined;
 		this.description = description;
+
+		Object.freeze(this);
 	}
 }

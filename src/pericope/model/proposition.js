@@ -1,71 +1,31 @@
-import _ from 'lodash';
-import Connectable from './connectable';
+import { List, Seq } from 'immutable';
 
-const parentSymbol = Symbol('parent');
-const clauseItemsSymbol = Symbol('clauseItems');
 const partBeforeArrowSymbol = Symbol('partBeforeArrow');
 const partAfterArrowSymbol = Symbol('partAfterArrow');
-const priorChildrenSymbol = Symbol('priorChildren');
-const laterChildrenSymbol = Symbol('laterChildren');
 
-export default class Proposition extends Connectable {
+export default class Proposition {
 	/**
 	 * @constructor
-	 * @param {ClauseItem[]} clauseItems - contained clause items
-	 * @param {Pericope|Proposition} [parent = null] - superordinated element (proposition or pericope)
+	 * @param {List<ClauseItem>|ClauseItem[]} clauseItems - contained clause items
 	 */
-	constructor(clauseItems, parent = null) {
-		super();
-
+	constructor(clauseItems) {
 		this.label = '';
+		this.comment = '';
+
 		this.syntacticFunction = null;
 		this.syntacticTranslation = '';
-		this.semanticTranslation = '';
-		this[clauseItemsSymbol] = clauseItems;
-		_.forEach(clauseItems, item => {
-			item.parent = this;
-		});
+		this.clauseItems = List(clauseItems);
 
-		this[parentSymbol] = parent;
-		this[priorChildrenSymbol] = [ ];
-		this[laterChildrenSymbol] = [ ];
+		this.superOrdinatedRelation = null;
+		this.role = null;
+		this.semanticTranslation = '';
+
+		this.priorChildren = List();
+		this.laterChildren = List();
 		this[partBeforeArrowSymbol] = null;
 		this[partAfterArrowSymbol] = null;
-	}
 
-	/**
-	 * @returns {Pericope|Propostion} superordinated model element
-	 */
-	get parent() {
-		return this[parentSymbol];
-	}
-
-	/**
-	 * @param {Pericope|Proposition} parent - superordinated model element
-	 */
-	set parent(parent) {
-		let singlePart = this.firstPart;
-		do {
-			singlePart[parentSymbol] = parent;
-			singlePart = singlePart.partAfterArrow;
-		} while (singlePart);
-	}
-
-	/**
-	 * @returns {ClauseItem[]} clause items contained in this proposition
-	 */
-	get clauseItems() {
-		return this[clauseItemsSymbol];
-	}
-
-	/**
-	 * @param {ClauseItem[]} items - clause items contained in this proposition
-	 */
-	set clauseItems(items) {
-		this[clauseItemsSymbol] = items;
-		_.forEach(items, item => {
-			item.parent = this;
-		});
+		Object.seal(this);
 	}
 
 	/**
@@ -90,7 +50,6 @@ export default class Proposition extends Connectable {
 		if (partAfterArrow) {
 			// set the back reference on the following part
 			partAfterArrow[partBeforeArrowSymbol] = this;
-			partAfterArrow.parent = this.parent;
 		} else if (this.partAfterArrow) {
 			// clear the back reference on the previously following part
 			this.partAfterArrow[partBeforeArrowSymbol] = null;
@@ -120,53 +79,41 @@ export default class Proposition extends Connectable {
 		return result;
 	}
 
-	/**
-	 * @returns {Proposition[]} subordinated propositions preceeding this one (in origin text order)
-	 */
-	get priorChildren() {
-		return this[priorChildrenSymbol];
+	get allParts() {
+		let allParts = List.of(this);
+		if (this.partAfterArrow) {
+			allParts = allParts.withMutations(list => {
+				let part = this.partAfterArrow;
+				while (part) {
+					list.push(part);
+					part = part.partAfterArrow;
+				}
+			});
+		}
+		return allParts;
 	}
 
 	/**
-	 * @param {Proposition[]} children - subordinated propositions preceeding this one (in origin text order)
+	 * @param {Proposition} child - child proposition to check for
+	 * @returns {boolean} whether the given proposition is a subordinated child of this proposition
 	 */
-	set priorChildren(children) {
-		this[priorChildrenSymbol] = children;
-		_.forEach(children, child => {
-			child.parent = this;
-		});
+	isParentOf(child) {
+		return Seq(this.priorChildren).concat(this.laterChildren).flatMap(proposition => proposition.allParts).includes(child);
 	}
 
 	/**
-	 * @returns {Proposition[]} subordinated propositions following this one (in origin text order)
-	 */
-	get laterChildren() {
-		return this[laterChildrenSymbol];
-	}
-
-	/**
-	 * @param {Proposition[]} children - subordinated propositions following this one (in origin text order)
-	 */
-	set laterChildren(children) {
-		this[laterChildrenSymbol] = children;
-		_.forEach(children, child => {
-			child.parent = this;
-		});
-	}
-
-	/**
-	 * Find the list of child propositions containing the given.
+	 * Find the list of child propositions containing the given one.
 	 * This might be either the priorChildren, laterChildren, or one of the former two on a partAfterArrow.
 	 * @param {Proposition} childProposition - subordinated element to find containing list for
-	 * @returns {Proposition[]|null} list of child propositions containing the given childProposition
+	 * @returns {List<Proposition>|undefined} list of child propositions containing the given childProposition
 	 */
 	getContainingList(childProposition) {
 		let part = this;
 		do {
-			if (_.includes(part.priorChildren, childProposition)) {
+			if (part.priorChildren.includes(childProposition)) {
 				return part.priorChildren;
 			}
-			if (_.includes(part.laterChildren, childProposition)) {
+			if (part.laterChildren.includes(childProposition)) {
 				return part.laterChildren;
 			}
 			part = part.partAfterArrow;
@@ -175,43 +122,39 @@ export default class Proposition extends Connectable {
 	}
 
 	/**
-	 * Prepend the provided child proposition to the priorChildren.
-	 * @param {Proposition} childToAdd - child proposition to subordinate
-	 * @returns {void}
+	 * Find the list of child propositions containing the given one and the corresponding setter function (with a single List<Proposition> parameter).
+	 * This might be either the priorChildren, laterChildren, or one of the former two on a partAfterArrow.
+	 * @param {Proposition} childProposition - subordinated element to find containing list for
+	 * @returns {{list: List<Proposition>, setter: function}|undefined} list of child propositions containing the given childProposition
 	 */
-	addLeadingPriorChild(childToAdd) {
-		childToAdd.parent = this;
-		this.priorChildren.unshift(childToAdd);
-	}
-
-	/**
-	 * Append the provided child proposition to the priorChildren.
-	 * @param {Proposition} childToAdd - child proposition to subordinate
-	 * @returns {void}
-	 */
-	addTrailingPriorChild(childToAdd) {
-		childToAdd.parent = this;
-		this.priorChildren.push(childToAdd);
-	}
-
-	/**
-	 * Prepend the provided child proposition to the laterChildren.
-	 * @param {Proposition} childToAdd - child proposition to subordinate
-	 * @returns {void}
-	 */
-	addLeadingLaterChild(childToAdd) {
-		childToAdd.parent = this;
-		this.laterChildren.unshift(childToAdd);
-	}
-
-	/**
-	 * Append the provided child proposition to the laterChildren.
-	 * @param {Proposition} childToAdd - child proposition to subordinate
-	 * @returns {void}
-	 */
-	addTrailingLaterChild(childToAdd) {
-		childToAdd.parent = this;
-		this.laterChildren.push(childToAdd);
+	getContainingListWithSetter(childProposition) {
+		const getPriorChildrenWithSetter = proposition => {
+			return {
+				list: proposition.priorChildren,
+				setter: newList => {
+					proposition.priorChildren = newList;
+				}
+			};
+		};
+		const getLaterChildrenWithSetter = proposition => {
+			return {
+				list: proposition.laterChildren,
+				setter: newList => {
+					proposition.laterChildren = newList;
+				}
+			};
+		};
+		let part = this;
+		do {
+			if (part.priorChildren.includes(childProposition)) {
+				return getPriorChildrenWithSetter(part);
+			}
+			if (part.laterChildren.includes(childProposition)) {
+				return getLaterChildrenWithSetter(part);
+			}
+			part = part.partAfterArrow;
+		} while (part);
+		return null;
 	}
 
 	/**
@@ -220,10 +163,10 @@ export default class Proposition extends Connectable {
 	 * @returns {void}
 	 */
 	removeChild(childToRemove) {
-		const children = this.getContainingList(childToRemove);
+		const children = this.getContainingListWithSetter(childToRemove);
 		if (children) {
 			// given proposition is an actual child (including partAfterArrows)
-			children.splice(_.indexOf(children, childToRemove), 1);
+			children.setter(children.list.remove(children.list.indexOf(childToRemove)));
 		} else if (childToRemove.partBeforeArrow) {
 			// given proposition is a partAfterArrow, just remove it from its counter part
 			childToRemove.partBeforeArrow.partAfterArrow = null;
@@ -239,8 +182,7 @@ export default class Proposition extends Connectable {
 	 * @returns {void}
 	 */
 	addClauseItemAfterPrior(itemToAdd, priorItem) {
-		itemToAdd.parent = this;
-		this.clauseItems.splice(_.indexOf(this.clauseItems, priorItem) + 1, 0, itemToAdd);
+		this.clauseItems = this.clauseItems.insert(this.clauseItems.indexOf(priorItem) + 1, itemToAdd);
 	}
 
 	/**
@@ -249,12 +191,12 @@ export default class Proposition extends Connectable {
 	 * @returns {void}
 	 */
 	removeClauseItems(itemsToRemove) {
-		_.forEach(itemsToRemove, item => {
-			this.clauseItems.splice(_.indexOf(this.clauseItems, item), 1);
+		itemsToRemove.forEach(item => {
+			this.clauseItems = this.clauseItems.remove(this.clauseItems.indexOf(item));
 		});
 	}
 
 	toString() {
-		return `Proposition(${_.map(this.clauseItems, item => '"' + item.originText + '"')})`;
+		return `Proposition(${this.clauseItems.map(item => '"' + item.originText + '"').toJS()})`;
 	}
 }
