@@ -4,12 +4,17 @@ This is an attempt at porting HermeneutiX (a module of the Java Swing desktop ap
 
 ## Done
 
+* Setup
+  * Basic project with webpack and babel for ES6 code
+  * Consistent code style via eslint
+  * Test infrastructure with jasmine and karma
+  * Automated builds via Travis CI
 * Port model classes (Pericope, Relation, Proposition, ClauseItem, ...) to Javascript.
 * Port model change logic (ModelChanger and related parts from model classes) and its tests to JavaScript.
+* Create plain model representation (without circular references) to put into Redux store.
 
 ## Still to do
 
-1. Create plain model representation (without circular references) to put into Redux store.
 1. Create Redux Reducer for single model instance (Pericope).
 1. Create basic React App
   * handling syntactic analysis

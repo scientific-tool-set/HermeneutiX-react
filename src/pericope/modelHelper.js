@@ -1,7 +1,9 @@
-import { Map, List, Seq } from 'immutable';
+import { List, Seq } from 'immutable';
 import PropertyAccessor from './propertyAccessor';
+import Pericope from './model/pericope';
 import Proposition from './model/proposition';
 import ClauseItem from './model/clauseItem';
+import Relation from './model/relation';
 
 /**
  * Construct the representing propositions from the given text.
@@ -25,24 +27,26 @@ export function buildPropositionsFromText(originText) {
 /**
  * Build a flat list of all propositions (including partAfterArrows) contained in the given pericope in the origin text order.
  * @param {Pericope} pericope - pericope for which to construct the flattened proposition list
+ * @param {boolean} [skipPartAfterArrows = false] - whether to exclude partAfterArrows from the created list
  * @returns {Seq<Proposition>} all contained propositions in the origin text order
  */
-export function getFlatText(pericope) {
+export function getFlatText(pericope, skipPartAfterArrows = false) {
 	// use a lazy Seq in order to avoid having to build the whole model as flat list if not necessary
-	return Seq(pericope.text).flatMap(flattenProposition);
+	return Seq(pericope.text).flatMap(prop => flattenProposition(prop, skipPartAfterArrows));
 }
 
 /**
  * Build a flat list of the given proposition and all its subordinated child propositions (including their partAfterArrows) in the origin text order.
  * @param {Proposition} proposition - proposition to build flat sequence representing its hierarchical structure for
+ * @param {boolean} skipPartAfterArrows - whether to exclude partAfterArrows from the created list
  * @returns {Seq<Proposition>} flat representation of the proposition's subtree
  */
-function flattenProposition(proposition) {
+function flattenProposition(proposition, skipPartAfterArrows) {
 	// use lazy Seqs in order to avoid having to build the whole model as flat list if not necessary
-	return Seq(proposition.priorChildren).flatMap(flattenProposition).concat(
-			proposition,
-			Seq(proposition.laterChildren).flatMap(flattenProposition),
-			proposition.partAfterArrow ? flattenProposition(proposition.partAfterArrow) : List()
+	return Seq(proposition.priorChildren).flatMap(prop => flattenProposition(prop, skipPartAfterArrows)).concat(
+			skipPartAfterArrows && proposition.partBeforeArrow ? List() : proposition,
+			Seq(proposition.laterChildren).flatMap(prop => flattenProposition(prop, skipPartAfterArrows)),
+			proposition.partAfterArrow ? flattenProposition(proposition.partAfterArrow, skipPartAfterArrows) : List()
 			);
 }
 
@@ -311,4 +315,134 @@ function getFollowingPropositionOnHigherLevel(priorProposition, skipPartAfterArr
 	}
 	// no (more) proposition parts, prior's follower is the parent's follower
 	return getFollowingPropositionOnSameOrHigherLevel(parent, skipPartAfterArrows);
+}
+
+export function copyPlainPericope(pericope) {
+	const plainPropositions = pericope.text.map(copyPlainProposition).toJS();
+	Object.freeze(plainPropositions);
+	const plainConnectables = [ ];
+	let referenceProposition = getFlatText(pericope).first();
+	while (referenceProposition) {
+		let topMostConnectable = referenceProposition;
+		while (topMostConnectable.superOrdinatedRelation) {
+			topMostConnectable = topMostConnectable.superOrdinatedRelation;
+		}
+		plainConnectables.push(copyPlainConnectableSubtree(topMostConnectable));
+		referenceProposition = getFollowingProposition(topMostConnectable, true);
+	}
+	Object.freeze(plainConnectables);
+	const plainPericope = {
+		language: pericope.language,
+		propositions: plainPropositions,
+		connectables: plainConnectables
+	};
+	Object.freeze(plainPericope);
+	return plainPericope;
+}
+
+export function copyMutablePericope(plainPericope) {
+	const { language, propositions, connectables } = plainPericope;
+	const pericope = new Pericope(propositions.map(copyMutableProposition), language);
+	if (pericope.text.size && connectables && connectables.length) {
+		const connectablePropositions = getFlatText(pericope, true).toJS();
+		connectables.forEach(singleConnectable => {
+			// we don't want any return values, just the implicit setting of superOrdinatedRelation properties
+			copyMutableConnectableSubtree(singleConnectable, connectablePropositions);
+		});
+	}
+	return pericope;
+}
+
+/**
+ * Convert the given mutable Proposition to a plain and frozen javascript object.
+ * @param {Propostion} proposition - proposition to subject to deep copying
+ * @returns {object} plain and frozen representation of the given proposition
+ */
+function copyPlainProposition(proposition) {
+	const propositionCopy = { };
+	if (!proposition.priorChildren.isEmpty()) {
+		propositionCopy.priorChildren = proposition.priorChildren.map(copyPlainProposition).toJS();
+		Object.freeze(propositionCopy.priorChildren);
+	}
+	copyPropertyIfNotNull(proposition, propositionCopy, 'label');
+	propositionCopy.clauseItems = proposition.clauseItems.map(item => {
+		const itemCopy = { originText: item.originText };
+		copyPropertyIfNotNull(item, itemCopy, 'syntacticFunction');
+		copyPropertyIfNotNull(item, itemCopy, 'comment');
+		Object.freeze(itemCopy);
+		return itemCopy;
+	}).toJS();
+	Object.freeze(propositionCopy.clauseItems);
+	copyPropertyIfNotNull(proposition, propositionCopy, 'syntacticFunction');
+	copyPropertyIfNotNull(proposition, propositionCopy, 'syntacticTranslation');
+	copyPropertyIfNotNull(proposition, propositionCopy, 'semanticTranslation');
+	copyPropertyIfNotNull(proposition, propositionCopy, 'comment');
+	if (!proposition.laterChildren.isEmpty()) {
+		propositionCopy.laterChildren = proposition.laterChildren.map(copyPlainProposition).toJS();
+		Object.freeze(propositionCopy.laterChildren);
+	}
+	if (proposition.partAfterArrow) {
+		propositionCopy.partAfterArrow = copyPlainProposition(proposition.partAfterArrow);
+	}
+	Object.freeze(propositionCopy);
+	return propositionCopy;
+}
+
+function copyMutableProposition(plainProposition) {
+	const clauseItems = plainProposition.clauseItems.map(item => new ClauseItem(item.originText, item.syntacticFunction, item.comment));
+	const proposition = new Proposition(clauseItems);
+	copyPropertyIfNotNull(plainProposition, proposition, 'label');
+	copyPropertyIfNotNull(plainProposition, proposition, 'syntacticFunction');
+	copyPropertyIfNotNull(plainProposition, proposition, 'syntacticTranslation');
+	copyPropertyIfNotNull(plainProposition, proposition, 'semanticTranslation');
+	copyPropertyIfNotNull(plainProposition, proposition, 'comment');
+	if (plainProposition.priorChildren) {
+		proposition.priorChildren = plainProposition.priorChildren.map(copyMutableProposition);
+	}
+	if (plainProposition.laterChildren) {
+		proposition.laterChildren = plainProposition.laterChildren.map(copyMutableProposition);
+	}
+	if (plainProposition.partAfterArrow) {
+		proposition.partAfterArrow = copyMutableProposition(plainProposition.partAfterArrow);
+	}
+	return proposition;
+}
+
+/**
+ * Make a plain copy of the connectable sub tree represented by the given top most item. Apply itself recursively for its associates.
+ * @param {Relation|Proposition} connectable - model element to copy as a plain and frozen representation for the connectables subtree
+ * @returns {object} plain and frozen javascript object representing the given model element
+ */
+function copyPlainConnectableSubtree(connectable) {
+	const connectableCopy = { };
+	copyPropertyIfNotNull(connectable, connectableCopy, 'role');
+	if (connectable instanceof Relation) {
+		copyPropertyIfNotNull(connectable, connectableCopy, 'comment');
+		connectableCopy.associates = connectable.associates.map(copyPlainConnectableSubtree).toJS();
+		Object.freeze(connectableCopy.associates);
+	}
+	Object.freeze(connectableCopy);
+	return connectableCopy;
+}
+
+function copyMutableConnectableSubtree(plainConnectable, connectablePropositions) {
+	if (!plainConnectable.associates) {
+		// connectable is a proposition, remove it from the beginning of the proposition list and return it
+		return connectablePropositions.shift();
+	}
+	// connectable is a relation, collect associates and create it accordingly
+	const associates = plainConnectable.associates.map(associate => copyMutableConnectableSubtree(associate, connectablePropositions));
+	const roles = plainConnectable.associates.map(associate => associate.role);
+	const relation = new Relation(associates, {
+		getAssociateRoles: () => roles
+	});
+	copyPropertyIfNotNull(plainConnectable, relation, 'comment');
+	return relation;
+}
+
+function copyPropertyIfNotNull(originalObject, copiedObject, propertyName) {
+	const value = originalObject[propertyName];
+	if (value && (typeof value !== 'string' || value.length !== 0)) {
+		copiedObject[propertyName] = value;
+	}
 }

@@ -12,7 +12,7 @@ export default class Relation {
 		this.comment = '';
 
 		this.associates = List(associates);
-		const roles = template.getAssociateRoles(associates.length);
+		const roles = List(template.getAssociateRoles(associates.length));
 		this.associates.forEach((associate, index) => {
 			associate.superOrdinatedRelation = this;
 			associate.role = roles.get(index);
