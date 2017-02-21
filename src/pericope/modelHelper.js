@@ -32,21 +32,22 @@ export function buildPropositionsFromText(originText) {
  */
 export function getFlatText(pericope, skipPartAfterArrows = false) {
 	// use a lazy Seq in order to avoid having to build the whole model as flat list if not necessary
-	return Seq(pericope.text).flatMap(prop => flattenProposition(prop, skipPartAfterArrows));
+	return Seq(pericope.text).flatMap(prop => flattenProposition(prop, skipPartAfterArrows, false));
 }
 
 /**
  * Build a flat list of the given proposition and all its subordinated child propositions (including their partAfterArrows) in the origin text order.
  * @param {Proposition} proposition - proposition to build flat sequence representing its hierarchical structure for
  * @param {boolean} skipPartAfterArrows - whether to exclude partAfterArrows from the created list
+ * @param {boolean} isPartAfterArrow - whether the given proposition is a partAfterArrow
  * @returns {Seq<Proposition>} flat representation of the proposition's subtree
  */
-function flattenProposition(proposition, skipPartAfterArrows) {
+function flattenProposition(proposition, skipPartAfterArrows, isPartAfterArrow) {
 	// use lazy Seqs in order to avoid having to build the whole model as flat list if not necessary
-	return Seq(proposition.priorChildren).flatMap(prop => flattenProposition(prop, skipPartAfterArrows)).concat(
-			skipPartAfterArrows && proposition.partBeforeArrow ? List() : proposition,
-			Seq(proposition.laterChildren).flatMap(prop => flattenProposition(prop, skipPartAfterArrows)),
-			proposition.partAfterArrow ? flattenProposition(proposition.partAfterArrow, skipPartAfterArrows) : List()
+	return Seq(proposition.priorChildren).flatMap(prop => flattenProposition(prop, skipPartAfterArrows, false)).concat(
+			skipPartAfterArrows && isPartAfterArrow ? List() : proposition,
+			Seq(proposition.laterChildren).flatMap(prop => flattenProposition(prop, skipPartAfterArrows, false)),
+			proposition.partAfterArrow ? flattenProposition(proposition.partAfterArrow, skipPartAfterArrows, true) : List()
 			);
 }
 
@@ -316,7 +317,7 @@ export function copyPlainPericope(pericope) {
 	Object.freeze(plainConnectables);
 	const plainPericope = {
 		language: pericope.language,
-		propositions: plainPropositions,
+		text: plainPropositions,
 		connectables: plainConnectables
 	};
 	Object.freeze(plainPericope);
@@ -324,8 +325,8 @@ export function copyPlainPericope(pericope) {
 }
 
 export function copyMutablePericope(plainPericope) {
-	const { language, propositions, connectables } = plainPericope;
-	const pericope = new Pericope(propositions.map(copyMutableProposition), language);
+	const { language, text, connectables } = plainPericope;
+	const pericope = new Pericope(text.map(copyMutableProposition), language);
 	if (pericope.text.size && connectables && connectables.length) {
 		const connectablePropositions = getFlatText(pericope, true).toJS();
 		connectables.forEach(singleConnectable => {
