@@ -1185,6 +1185,34 @@ describe('ModelChanger', () => {
 		});
 	});
 
+	describe('removeRelation()', () => {
+		it('be able to remove single Relation without removing its associate Relations', () => {
+			const relation12 = ModelChanger.createRelation([ first, second ], defaultRelationTemplate);
+			const relationToRemove = ModelChanger.createRelation([ relation12, third ], defaultRelationTemplate);
+			ModelChanger.removeRelation(relationToRemove);
+
+			expect(first.superOrdinatedRelation).toBe(relation12);
+			expect(second.superOrdinatedRelation).toBe(relation12);
+			expect(third.superOrdinatedRelation).toBe(null);
+			expect(relation12.superOrdinatedRelation).toBe(null);
+		});
+
+		it('be able to remove Relation and its superOrdinatedRelations', () => {
+			const relation12 = ModelChanger.createRelation([ first, second ], defaultRelationTemplate);
+			const relation34 = ModelChanger.createRelation([ third, fourth ], defaultRelationTemplate);
+			const relation1to4 = ModelChanger.createRelation([ relation12, relation34 ], defaultRelationTemplate);
+			ModelChanger.createRelation([ relation1to4, fifth ], defaultRelationTemplate);
+			ModelChanger.removeRelation(relation34);
+
+			expect(first.superOrdinatedRelation).toBe(relation12);
+			expect(second.superOrdinatedRelation).toBe(relation12);
+			expect(relation12.superOrdinatedRelation).toBe(null);
+			expect(third.superOrdinatedRelation).toBe(null);
+			expect(fourth.superOrdinatedRelation).toBe(null);
+			expect(fifth.superOrdinatedRelation).toBe(null);
+		});
+	});
+
 	describe('prependText()', () => {
 		it('be able to prepend Proposition as text', () => {
 			ModelChanger.prependText(pericope, ' 0\n\t\n');

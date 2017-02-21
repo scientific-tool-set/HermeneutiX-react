@@ -1,7 +1,7 @@
 import { List } from 'immutable';
 
-import { buildPropositionsFromText, getContainingListInParent, addChildAfterPrior, addChildBeforeFollower, removeChild,
-		isPriorOf, getFollowingProposition, getFollowingPropositionOnSameOrHigherLevel, removeRelation
+import { buildPropositionsFromText, addChildAfterPrior, addChildBeforeFollower, removeChild,
+		getContainingListInParent, isPriorOf, getFollowingProposition, getFollowingPropositionOnSameOrHigherLevel
 } from './modelHelper';
 import Proposition from './model/proposition';
 import ClauseItem from './model/clauseItem';
@@ -612,6 +612,23 @@ export function removePropositions(pericope, propositionsToRemove) {
 		}
 		removeChild(pericope, proposition);
 	});
+}
+
+/**
+ * Destroy the given relation and all super ordinated relations, thereby also cleaning up any back references from its associates.
+ * @param {Relation} relation - relation to remove
+ * @returns {void}
+ */
+export function removeRelation(relation) {
+	let superOrdinatedRelation = relation;
+	do {
+		// reset subordinated relations/propositions to belong to no relation
+		superOrdinatedRelation.associates.forEach(associate => {
+			associate.superOrdinatedRelation = null;
+			associate.role = null;
+		});
+		superOrdinatedRelation = superOrdinatedRelation.superOrdinatedRelation;
+	} while (superOrdinatedRelation);
 }
 
 /**

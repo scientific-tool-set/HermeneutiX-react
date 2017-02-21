@@ -132,23 +132,6 @@ export function removeChild(parent, childToRemove) {
 }
 
 /**
- * Destroy the given relation and all super ordinated relations, thereby also cleaning up any back references from its associates.
- * @param {Relation} relation - relation to remove
- * @returns {void}
- */
-export function removeRelation(relation) {
-	let superOrdinatedRelation = relation;
-	do {
-		// reset subordinated relations/propositions to belong to no relation
-		superOrdinatedRelation.associates.forEach(associate => {
-			associate.superOrdinatedRelation = null;
-			associate.role = null;
-		});
-		superOrdinatedRelation = superOrdinatedRelation.superOrdinatedRelation;
-	} while (superOrdinatedRelation);
-}
-
-/**
  * Check whether the given proposition/relation is immediately preceding the given other proposition/relation.
  * @param {(Relation|Proposition)} reference - leading element
  * @param {(Relation|Proposition)} follower - trailing element
