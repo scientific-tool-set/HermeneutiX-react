@@ -4,7 +4,7 @@ import { NEW_PROJECT, START_ANALYSIS, PREPEND_TEXT, APPEND_TEXT, REMOVE_PROPOSIT
 		CREATE_RELATION, ROTATE_ASSOCIATE_ROLES, ALTER_RELATION_TYPE
 		} from '../actions/index';
 import * as ModelChanger from './modelChanger';
-import { buildPropositionsFromText, copyPlainPericope, copyMutablePericope, getFlatText } from './modelHelper';
+import { buildPropositionsFromText, copyPlainPericope, copyMutablePericope, getFlatText, getFlatRelations } from './modelHelper';
 import Pericope from './model/pericope';
 import LanguageModel from './model/languageModel';
 
@@ -37,11 +37,11 @@ export default function(state = INITIAL_STATE, action) {
 		case SPLIT_CLAUSE_ITEM:
 			return splitClauseItem(state, action);
 		case CREATE_RELATION:
-			return state; // TODO: provide actual implementation
+			return createRelation(state, action);
 		case ROTATE_ASSOCIATE_ROLES:
-			return state; // TODO: provide actual implementation
+			return rotateAssociateRoles(state, action);
 		case ALTER_RELATION_TYPE:
-			return state; // TODO: provide actual implementation
+			return alterRelationType(state, action);
 		case PREPEND_TEXT:
 			return prependText(state, action);
 		case APPEND_TEXT:
@@ -130,6 +130,42 @@ function splitClauseItem(state, action) {
 	const pericope = copyMutablePericope(state);
 	const proposition = getFlatText(pericope).get(propositionIndex);
 	ModelChanger.splitClauseItem(proposition, proposition.clauseItems.get(itemIndex), action.firstOriginTextPart);
+	return copyPlainPericope(pericope);
+}
+
+function createRelation(state, action) {
+	const plainFlatRelations = getFlatRelations(state).cacheResult();
+	const plainFlatText = getFlatText(state, true).cacheResult();
+	const mutablePericope = copyMutablePericope(state);
+	const mutableFlatRelations = getFlatRelations(mutablePericope).cacheResult();
+	const mutableFlatText = getFlatText(mutablePericope, true).cacheResult();
+	const mutableAssociates = [ ];
+	action.associates.forEach(associate => {
+		if (associate.associates) {
+			// append respective Relation
+			mutableAssociates.push(mutableFlatRelations.get(plainFlatRelations.indexOf(associate)));
+		} else {
+			// append respective Proposition
+			mutableAssociates.push(mutableFlatText.get(plainFlatText.indexOf(associate)));
+		}
+	});
+	ModelChanger.createRelation(mutableAssociates, action.template);
+	return copyPlainPericope(mutablePericope);
+}
+
+function rotateAssociateRoles(state, action) {
+	const relationIndex = getFlatRelations(state).indexOf(action.relation);
+	const pericope = copyMutablePericope(state);
+	const relation = getFlatRelations(pericope).get(relationIndex);
+	ModelChanger.rotateAssociateRoles(relation);
+	return copyPlainPericope(pericope);
+}
+
+function alterRelationType(state, action) {
+	const relationIndex = getFlatRelations(state).indexOf(action.relation);
+	const pericope = copyMutablePericope(state);
+	const relation = getFlatRelations(pericope).get(relationIndex);
+	ModelChanger.alterRelationType(relation, action.template);
 	return copyPlainPericope(pericope);
 }
 

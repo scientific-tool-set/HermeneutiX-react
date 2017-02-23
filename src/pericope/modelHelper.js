@@ -25,8 +25,8 @@ export function buildPropositionsFromText(originText) {
 }
 
 /**
- * Build a flat list of all propositions (including partAfterArrows) contained in the given pericope in the origin text order.
- * @param {Pericope} pericope - pericope for which to construct the flattened proposition list
+ * Build a flat sequence of all propositions (including partAfterArrows) contained in the given pericope in the origin text order.
+ * @param {Pericope} pericope - pericope for which to construct the flattened proposition sequence
  * @param {boolean} [skipPartAfterArrows = false] - whether to exclude partAfterArrows from the created list
  * @returns {Seq<Proposition>} all contained propositions in the origin text order
  */
@@ -36,7 +36,7 @@ export function getFlatText(pericope, skipPartAfterArrows = false) {
 }
 
 /**
- * Build a flat list of the given proposition and all its subordinated child propositions (including their partAfterArrows) in the origin text order.
+ * Build a flat sequence of the given proposition and all its subordinated child propositions (including their partAfterArrows) in the origin text order.
  * @param {Proposition} proposition - proposition to build flat sequence representing its hierarchical structure for
  * @param {boolean} skipPartAfterArrows - whether to exclude partAfterArrows from the created list
  * @param {boolean} isPartAfterArrow - whether the given proposition is a partAfterArrow
@@ -49,6 +49,41 @@ function flattenProposition(proposition, skipPartAfterArrows, isPartAfterArrow) 
 			Seq(proposition.laterChildren).flatMap(prop => flattenProposition(prop, skipPartAfterArrows, false)),
 			proposition.partAfterArrow ? flattenProposition(proposition.partAfterArrow, skipPartAfterArrows, true) : List()
 			);
+}
+
+/**
+ * Build a flat sequence of all relations contained in the given pericope in some deterministic order.
+ * @param {Pericope} pericope - pericope for which to construct the flattened relation sequence
+ * @returns {Seq<Relation>} all contained relations in a deterministic order (for identifying matching instances in independent copies of the same pericope)
+ */
+export function getFlatRelations(pericope) {
+	// use a lazy Seq in order to avoid having to iterate all relation trees if not necessary
+	const topMostRelations = List().asMutable();
+	let nextConnectable = getFlatText(pericope).first();
+	do {
+		while (nextConnectable.superOrdinatedRelation) {
+			// find the top most relation
+			nextConnectable = nextConnectable.superOrdinatedRelation;
+		}
+		if (nextConnectable.associates) {
+			// targeted connectable is a relation, add it to the list.
+			topMostRelations.push(nextConnectable);
+		}
+		nextConnectable = getFollowingProposition(nextConnectable, true);
+	} while (nextConnectable);
+	// recursively collect all associates that are relations too
+	return Seq(topMostRelations).flatMap(flattenRelation);
+}
+
+/**
+ * Build a flat sequence of the given relation and all its associates that are relations as well (recursively).
+ * @param {Relation} relation - relation to build flat sequence representing it with all its associate relations
+ * @returns {Seq<Relation>} flat representation of the relation's subtree
+ */
+function flattenRelation(relation) {
+	// use a lazy Seq in order to avoid having to iterate all relation trees if not necessary
+	return Seq.of(relation).concat(
+			Seq(relation.associates).flatMap(associate => associate.associates ? flattenRelation(associate) : List()));
 }
 
 /**

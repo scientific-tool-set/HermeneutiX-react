@@ -1,4 +1,4 @@
-import { List } from 'immutable';
+import { List, Repeat } from 'immutable';
 
 import * as ModelHelper from '../../src/pericope/modelHelper';
 import LanguageModel from '../../src/pericope/model/languageModel';
@@ -199,6 +199,53 @@ describe('ModelHelper', () => {
 			// skipped fifth Propostion as it is a partAfterArrow
 			expect(flatText.last()).toBe(sixth);
 			// skipped seventh Proposition as it is a partAfterArrow
+		});
+	});
+
+	describe('getFlatRelations()', () => {
+		const template = {
+			getAssociateRoles: () => Repeat(new AssociateRole('X', true), 3)
+		};
+		let pericope, first, second, third, fourth, fifth, sixth;
+
+		beforeEach(function() {
+			first = new Proposition([ new ClauseItem('1') ]);
+			second = new Proposition([ new ClauseItem('2') ]);
+			third = new Proposition([ new ClauseItem('3') ]);
+			fourth = new Proposition([ new ClauseItem('4') ]);
+			fifth = new Proposition([ new ClauseItem('5') ]);
+			sixth = new Proposition([ new ClauseItem('6') ]);
+			pericope = new Pericope([ first, second, third, fourth, fifth, sixth ], language);
+		});
+
+		it('handle Pericope without Relations', () => {
+			const flatRelations = ModelHelper.getFlatRelations(pericope);
+
+			expect(flatRelations.count()).toBe(0);
+		});
+
+		it('handle Pericope with Relations of tree depth 1 only', () => {
+			const relation23 = new Relation([ second, third ], template);
+			const relation4to6 = new Relation([ fourth, fifth, sixth ], template);
+			const flatRelations = ModelHelper.getFlatRelations(pericope).cacheResult();
+
+			expect(flatRelations.count()).toBe(2);
+			expect(flatRelations.first()).toBe(relation23);
+			expect(flatRelations.last()).toBe(relation4to6);
+		});
+
+		it('handle Pericope with nested Relations', () => {
+			const relation23 = new Relation([ second, third ], template);
+			const relation1to3 = new Relation([ first, relation23 ], template);
+			const relation56 = new Relation([ fifth, sixth ], template);
+			const relation1to6 = new Relation([ relation1to3, fourth, relation56 ], template);
+			const flatRelations = ModelHelper.getFlatRelations(pericope).cacheResult();
+
+			expect(flatRelations.count()).toBe(4);
+			expect(flatRelations.first()).toBe(relation1to6);
+			expect(flatRelations.get(1)).toBe(relation1to3);
+			expect(flatRelations.get(2)).toBe(relation23);
+			expect(flatRelations.last()).toBe(relation56);
 		});
 	});
 
@@ -487,7 +534,7 @@ describe('ModelHelper', () => {
 		});
 
 		it('be able to remove top level Proposition', () => {
-			const pericope = new Pericope([ first, second, third, fourth, extra, fifth], language);
+			const pericope = new Pericope([ first, second, third, fourth, extra, fifth ], language);
 			expect(ModelHelper.getFlatText(pericope).includes(extra));
 			ModelHelper.removeChild(pericope, extra);
 
@@ -501,7 +548,7 @@ describe('ModelHelper', () => {
 
 		it('be able to remove prior child Proposition', () => {
 			fourth.priorChildren = [ second, extra, third ];
-			const pericope = new Pericope([ first, fourth, fifth], language);
+			const pericope = new Pericope([ first, fourth, fifth ], language);
 			expect(ModelHelper.getFlatText(pericope).includes(extra));
 			ModelHelper.removeChild(fourth, extra);
 
@@ -516,7 +563,7 @@ describe('ModelHelper', () => {
 
 		it('be able to remove later child Proposition', () => {
 			second.laterChildren = [ extra, third, fourth ];
-			const pericope = new Pericope([ first, second, fifth], language);
+			const pericope = new Pericope([ first, second, fifth ], language);
 			expect(ModelHelper.getFlatText(pericope).includes(extra));
 			ModelHelper.removeChild(second, extra);
 
@@ -532,7 +579,7 @@ describe('ModelHelper', () => {
 		it('be able to remove partAfterArrow\'s prior child Proposition', () => {
 			fourth.priorChildren = [ second, extra, third ];
 			first.partAfterArrow = fourth;
-			const pericope = new Pericope([ first, fifth], language);
+			const pericope = new Pericope([ first, fifth ], language);
 			expect(ModelHelper.getFlatText(pericope).includes(extra));
 			ModelHelper.removeChild(first, extra);
 
@@ -716,7 +763,7 @@ describe('ModelHelper', () => {
 				getAssociateRoles: () => [ new AssociateRole('L', false), new AssociateRole('H', true), new AssociateRole('L', false) ]
 			});
 			const relation1to5 = new Relation([ relation12, relation35 ], {
-				getAssociateRoles: () => [ new AssociateRole('X', true), new AssociateRole('X', true) ]
+				getAssociateRoles: () => [ Repeat(new AssociateRole('X', true), 2) ]
 			});
 			const pericope = new Pericope([ first, fifth ], language);
 			const plain = ModelHelper.copyPlainPericope(pericope);
