@@ -13,7 +13,7 @@ describe('PericopeReducer', () => {
 			const action = createAction(ActionTypes.NEW_PROJECT);
 			const initialState = {
 				language: new LanguageModel('', true, [ [ ] ]),
-				propositions: [ ],
+				text: [ ],
 				connectables: [ ]
 			};
 

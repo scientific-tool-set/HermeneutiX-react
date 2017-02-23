@@ -8,12 +8,61 @@ import { buildPropositionsFromText, copyPlainPericope, copyMutablePericope, getF
 import Pericope from './model/pericope';
 import LanguageModel from './model/languageModel';
 
+/**
+ * A single ClauseItem converted to a frozen data-only structure.
+ * @typedef {object} PlainClauseItem
+ * @property {string} originText - the represented part of the origin text
+ * @property {?SyntacticFunction} syntacticFunction - th associated syntactic function with its parent proposition
+ * @property {?string} comment - additional comment text
+ */
+/**
+ * A single Proposition converted to a frozen structure without circular references (i.e. no back references to objects).
+ * @typedef {object} PlainProposition
+ * @property {?Array.<PlainProposition>} priorChildren - preceeding subordinated child propositions
+ * @property {Array.<PlainClauseItem>} clauseItems - the clause items containing the origin text
+ * @property {?string} label - a short identifier
+ * @property {?string} syntacticTranslation - associated translation from the syntactic analysis
+ * @property {?string} semanticTranslation - associated translation from the semantic analysis
+ * @property {?SyntacticFunction} syntacticFunction - syntactic function of this proposition (if it is subordinated to another one)
+ * @property {?string} comment - additional comment text
+ * @property {?Array.<PlainProposition>} laterChildren - following subordinated child propositions
+ * @property {?PlainProposition} partAfterArrow - another part of the same proposition that continues after some enclosed subordinated child propositions
+ */
+/**
+ * Representation of a non-partAfterArrow Proposition in the plain connectable subtree.
+ * @typedef {object} PlainPropositionPlaceholder
+ * @property {?AssociateRole} role - role and weight of this proposition in its super ordinated relation
+ */
+/**
+ * A single Relation converted to a frozen structure without a circular back reference to its super ordinated relation, in the plain connectable subtree.
+ * @typedef {object} PlainRelation
+ * @property {Array.<(PlainPropositionPlaceholder|PlainRelation)>} associates - contained propositions and/or relations in this one
+ * @property {?AssociateRole} role - role and weight of this relation in its super ordinated relation
+ */
+/**
+ * The object representing a plain Pericope, i.e. the one used as the state.
+ * @typedef {object} PlainPericope
+ * @property {LanguageModel} language - the associated origin text language with its name, orientation, and syntactic functions
+ * @property {Array.<PlainProposition>} text - the list of top level Propositions with their nested child Propositions and partAfterArrows
+ * @property {Array.<(PlainPropositionPlaceholder|PlainRelation)>} connectables - the list of relation sub trees filled up with placeholders for unrelated Propositions
+ */
+
+/**
+ * Initial state to fall back on in the beginning and to reset to on NEW_PROJECT action.
+ * @type {PlainPericope}
+ */
 const INITIAL_STATE = {
 	language: new LanguageModel('', true, [ [ ] ]),
-	propositions: [ ],
+	text: [ ],
 	connectables: [ ]
 };
 
+/**
+ * Reducer returning the new state after the given action has been applied.
+ * @param {PlainPericope} state - the current state
+ * @param {{type: string}} action - action to apply, additional fields can be expected depending on the action's type
+ * @returns {PlainPericope} new state (potentially the old one if nothing changed)
+ */
 export default function(state = INITIAL_STATE, action) {
 	switch (action.type) {
 		case NEW_PROJECT:
@@ -53,6 +102,13 @@ export default function(state = INITIAL_STATE, action) {
 	}
 }
 
+/**
+ * Subordinate the given target proposition under the specified parent and set its indentation function.
+ * This may influence indentations of propositions between the given two (target and parent).
+ * @param {PlainPericope} state - current state
+ * @param {{target: PlainProposition, parent: PlainProposition, syntacticFunction: SyntacticFunction}} action - object containing additional payload for executing action
+ * @returns {PlainPericope} new state
+ */
 function indentPropositionUnderParent(state, action) {
 	const plainFlatText = getFlatText(state).cacheResult();
 	const targetIndex = indexOfPropositionInSeq(plainFlatText, action.target);
@@ -65,6 +121,12 @@ function indentPropositionUnderParent(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Merge the two given propositions, which need to be the same kind of children to the same parent or at least adjacent to oneanother.
+ * @param {PlainPericope} state - current state
+ * @param {{propOne: PlainProposition, propTwo: PlainProposition}} action - object containing additional payload for executing action
+ * @returns {PlainPericope} new state
+ */
 function mergePropositions(state, action) {
 	const plainFlatText = getFlatText(state).cacheResult();
 	const propOneIndex = indexOfPropositionInSeq(plainFlatText, action.propOne);
@@ -139,22 +201,20 @@ function createRelation(state, action) {
 	const mutablePericope = copyMutablePericope(state);
 	const mutableFlatRelations = getFlatRelations(mutablePericope).cacheResult();
 	const mutableFlatText = getFlatText(mutablePericope, true).cacheResult();
-	const mutableAssociates = [ ];
-	action.associates.forEach(associate => {
+	const mutableAssociates = action.associates.map(associate => {
 		if (associate.associates) {
 			// append respective Relation
-			mutableAssociates.push(mutableFlatRelations.get(plainFlatRelations.indexOf(associate)));
-		} else {
-			// append respective Proposition
-			mutableAssociates.push(mutableFlatText.get(plainFlatText.indexOf(associate)));
+			return mutableFlatRelations.get(indexOfRelationInSeq(plainFlatRelations, associate));
 		}
+		// append respective Proposition
+		return mutableFlatText.get(indexOfPropositionInSeq(plainFlatText, associate));
 	});
 	ModelChanger.createRelation(mutableAssociates, action.template);
 	return copyPlainPericope(mutablePericope);
 }
 
 function rotateAssociateRoles(state, action) {
-	const relationIndex = getFlatRelations(state).indexOf(action.relation);
+	const relationIndex = indexOfRelationInSeq(getFlatRelations(state), action.relation);
 	const pericope = copyMutablePericope(state);
 	const relation = getFlatRelations(pericope).get(relationIndex);
 	ModelChanger.rotateAssociateRoles(relation);
@@ -162,7 +222,7 @@ function rotateAssociateRoles(state, action) {
 }
 
 function alterRelationType(state, action) {
-	const relationIndex = getFlatRelations(state).indexOf(action.relation);
+	const relationIndex = indexOfRelationInSeq(getFlatRelations(state), action.relation);
 	const pericope = copyMutablePericope(state);
 	const relation = getFlatRelations(pericope).get(relationIndex);
 	ModelChanger.alterRelationType(relation, action.template);
@@ -190,14 +250,42 @@ function removePropositions(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Find the index of the given proposition in the provided flat sequence.
+ * @param {Seq.<(Proposition|PlainProposition)>} flatText - flat sequence of all propositions
+ * @param {Proposition|PlainProposition} proposition - element to determine index for
+ * @returns {integer} index of given proposition
+ */
 function indexOfPropositionInSeq(flatText, proposition) {
 	return flatText.findIndex(prop => prop === proposition);
 }
 
+/**
+ * Find the index of the given clause item's parent proposition in the provided flat sequence.
+ * @param {Seq.<(Proposition|PlainProposition)>} flatText - flat sequence of all propositions
+ * @param {ClauseItem|PlainClauseItem} clauseItem - element to determine index for
+ * @returns {integer} index of given clause item's parent proposition
+ */
 function indexOfClauseItemParentInSeq(flatText, clauseItem) {
 	return flatText.findIndex(prop => prop.clauseItems.some(item => item === clauseItem));
 }
 
+/**
+ * Find the index of the given clause item in the given parent proposition.
+ * @param {Proposition|PlainProposition} proposition - proposition to find clause item in
+ * @param {ClauseItem|PlainClauseItem} clauseItem - element to determine index for
+ * @returns {integer} index of given clause item in the given parent proposition
+ */
 function indexOfClauseItemInProposition(proposition, clauseItem) {
 	return proposition.clauseItems.findIndex(item => item === clauseItem);
+}
+
+/**
+ * Find the index of the given relation in the provided flat sequence.
+ * @param {Seq.<(Relation|PlainRelation)>} flatRelations - flat sequence of all relations
+ * @param {Relation|PlainRelation} relation - element to determine index for
+ * @returns {integer} index of given relation
+ */
+function indexOfRelationInSeq(flatRelations, relation) {
+	return flatRelations.findIndex(rel => rel === relation);
 }
