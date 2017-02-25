@@ -224,6 +224,14 @@ describe('ModelHelper', () => {
 			expect(flatRelations.count()).toBe(0);
 		});
 
+		it('handle Pericope with single Relation', () => {
+			const relation23 = new Relation([ second, third ], template);
+			const flatRelations = ModelHelper.getFlatRelations(pericope);
+
+			expect(flatRelations.count()).toBe(1);
+			expect(flatRelations.first()).toBe(relation23);
+		});
+
 		it('handle Pericope with Relations of tree depth 1 only', () => {
 			const relation23 = new Relation([ second, third ], template);
 			const relation4to6 = new Relation([ fourth, fifth, sixth ], template);

@@ -265,7 +265,7 @@ function mergeConnectedPropositionAttributes(propOne, propTwo) {
 	propOne.syntacticTranslation = joinStrings(propOne.syntacticTranslation, propTwo.syntacticTranslation, ' ');
 	propOne.semanticTranslation = joinStrings(propOne.semanticTranslation, propTwo.semanticTranslation, ' ');
 	propOne.comment = joinStrings(propOne.comment, propTwo.comment, '\n');
-	if (propOne.syntacticFunction === null && propOne.parent instanceof Proposition) {
+	if (!propOne.syntacticFunction && propOne.parent instanceof Proposition) {
 		propOne.syntacticFunction = propTwo.syntacticFunction;
 	}
 	propOne.laterChildren = propTwo.laterChildren;
@@ -409,8 +409,9 @@ export function splitProposition(proposition, lastItemInFirstPart) {
 			}
 		}
 		// transfer partAfterArrow
-		secondPart.partAfterArrow = proposition.partAfterArrow;
+		const partAfterArrow = proposition.partAfterArrow;
 		proposition.partAfterArrow = null;
+		secondPart.partAfterArrow = partAfterArrow;
 		// insert new proposition
 		addChildAfterPrior(proposition.parent, secondPart, proposition);
 	} else if (proposition.partAfterArrow) {

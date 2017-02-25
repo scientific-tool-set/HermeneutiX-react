@@ -11,6 +11,8 @@ import LanguageModel from './model/languageModel';
 /**
  * A single ClauseItem converted to an immutable data-only structure.
  * @typedef {object} PlainClauseItem
+ * @property {integer} index - index of the represented clause item in its parent propostion
+ * @property {integer} parentIndex - index of the parent proposition in the origin text order
  * @property {string} originText - the represented part of the origin text
  * @property {?SyntacticFunction} syntacticFunction - th associated syntactic function with its parent proposition
  * @property {?string} comment - additional comment text
@@ -18,6 +20,7 @@ import LanguageModel from './model/languageModel';
 /**
  * A single Proposition converted to an immutable structure without circular references (i.e. no back references to objects).
  * @typedef {object} PlainProposition
+ * @property {integer} index - index of the represented proposition in the origin text order
  * @property {?Array.<PlainProposition>} priorChildren - preceeding subordinated child propositions
  * @property {Array.<PlainClauseItem>} clauseItems - the clause items containing the origin text
  * @property {?string} label - a short identifier
@@ -31,11 +34,13 @@ import LanguageModel from './model/languageModel';
 /**
  * Representation of a non-partAfterArrow Proposition in the plain connectable subtree.
  * @typedef {object} PlainPropositionPlaceholder
+ * @property {integer} index - index of the represented proposition in the origin text order
  * @property {?AssociateRole} role - role and weight of this proposition in its super ordinated relation
  */
 /**
  * A single Relation converted to an immutable structure without a circular back reference to its super ordinated relation, in the plain connectable subtree.
  * @typedef {object} PlainRelation
+ * @property {integer} index - index of the represented relation in the origin text order (and from top to bottom in case of a relation tree)
  * @property {Array.<(PlainPropositionPlaceholder|PlainRelation)>} associates - contained propositions and/or relations in this one
  * @property {?AssociateRole} role - role and weight of this relation in its super ordinated relation
  */
@@ -105,201 +110,177 @@ export default function(state = INITIAL_STATE, action) {
 }
 
 /**
- * Subordinate the given target proposition under the specified parent and set its indentation function.
+ * Subordinate the indicated target proposition under the specified parent and set its indentation function.
  * This may influence indentations of propositions between the given two (target and parent).
  * @param {PlainPericope} state - current state
- * @param {{ target: PlainProposition, parent: PlainProposition, syntacticFunction: SyntacticFunction }} action - object containing two propositions (to indent target under parent with given function)
+ * @param {{ targetIndex: integer, parentIndex: integer, syntacticFunction: SyntacticFunction }} action - object identifying two propositions (to indent target under parent with given function)
  * @returns {PlainPericope} new state
  */
 function indentPropositionUnderParent(state, action) {
-	const plainFlatText = getFlatText(state).cacheResult();
-	const targetIndex = indexOfPropositionInSeq(plainFlatText, action.target);
-	const parentIndex = indexOfPropositionInSeq(plainFlatText, action.parent);
 	const pericope = copyMutablePericope(state);
 	const pericopeFlatText = getFlatText(pericope).cacheResult();
-	const targetProposition = pericopeFlatText.get(targetIndex);
-	const parentProposition = pericopeFlatText.get(parentIndex);
+	const targetProposition = pericopeFlatText.get(action.targetIndex);
+	const parentProposition = pericopeFlatText.get(action.parentIndex);
 	ModelChanger.indentPropositionUnderParent(targetProposition, parentProposition, action.syntacticFunction);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Merge the two given propositions, which need to be the same kind of children to the same parent or at least adjacent to oneanother.
+ * Merge the two indicated propositions, which need to be the same kind of children to the same parent or at least adjacent to oneanother.
  * @param {PlainPericope} state - current state
- * @param {{ propOne: PlainProposition, propTwo: PlainProposition }} action - object containing two propositions to merge
+ * @param {{ propOneIndex: integer, propTwoIndex: integer }} action - object indicating two propositions to merge
  * @returns {PlainPericope} new state
  */
 function mergePropositions(state, action) {
-	const plainFlatText = getFlatText(state).cacheResult();
-	const propOneIndex = indexOfPropositionInSeq(plainFlatText, action.propOne);
-	const propTwoIndex = indexOfPropositionInSeq(plainFlatText, action.propTwo);
 	const pericope = copyMutablePericope(state);
 	const pericopeFlatText = getFlatText(pericope).cacheResult();
-	const propOneProposition = pericopeFlatText.get(propOneIndex);
-	const propTwoProposition = pericopeFlatText.get(propTwoIndex);
+	const propOneProposition = pericopeFlatText.get(action.propOneIndex);
+	const propTwoProposition = pericopeFlatText.get(action.propTwoIndex);
 	ModelChanger.mergePropositions(propOneProposition, propTwoProposition);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Make the given proposition a sibling of its current parent, i.e. un-subordinate it once.
+ * Make the indicated proposition a sibling of its current parent, i.e. un-subordinate it once.
  * @param {PlainPericope} state - current state
- * @param {{ proposition: PlainProposition }} action - object containing proposition to move up to the same level as its parent
+ * @param {{ propositionIndex: integer }} action - object indicating proposition to move up to the same level as its parent
  * @returns {PlainPericope} new state
  * @throws {IllegalActionError} proposition is a top level propositions or a directly enclosed child
  */
 function removeOneIndentation(state, action) {
-	const index = indexOfPropositionInSeq(getFlatText(state), action.proposition);
 	const pericope = copyMutablePericope(state);
-	const proposition = getFlatText(pericope).get(index);
+	const proposition = getFlatText(pericope).get(action.propositionIndex);
 	ModelChanger.removeOneIndentation(proposition);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Split the selected proposition after the designated clause item and
- * remove all relations that will become invalid by this change.
+ * Split the indicated proposition after the designated clause item and remove all relations that will become invalid by this change.
  * @param {PlainPericope} state - current state
- * @param {{ proposition: PlainProposition, lastItemInFirstPart: PlainClauseItem }} action - object containing proposition to split after designated clause item
+ * @param {{ propositionIndex: integer, lastItemInFirstPartIndex: integer }} action - object indicating proposition to split after designated clause item
  * @returns {PlainPericope} new state
  * @throws {IllegalActionError}
  */
 function splitProposition(state, action) {
-	const flatText = getFlatText(state).cacheResult();
-	const propositionIndex = indexOfPropositionInSeq(flatText, action.proposition);
-	const itemIndex = indexOfClauseItemInProposition(flatText.get(propositionIndex), action.lastItemInFirstPart);
 	const pericope = copyMutablePericope(state);
-	const proposition = getFlatText(pericope).get(propositionIndex);
-	ModelChanger.splitProposition(proposition, proposition.clauseItems.get(itemIndex));
+	const proposition = getFlatText(pericope).get(action.propositionIndex);
+	const item = proposition.clauseItems.get(action.lastItemInFirstPartIndex);
+	ModelChanger.splitProposition(proposition, item);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Restore the standalone state of the given proposition part.
+ * Restore the standalone state of the indicated proposition part.
  * @param {PlainPericope} state - current state
- * @param {{ partAfterArrow: PlainProposition }} action - object containing proposition part to reset to being a standalone proposition
+ * @param {{ partAfterArrowIndex: integer }} action - object indicating proposition part to reset to being a standalone proposition
  * @returns {PlainPericope} new state
  */
 function resetStandaloneStateOfPartAfterArrow(state, action) {
-	const index = indexOfPropositionInSeq(getFlatText(state), action.proposition);
 	const pericope = copyMutablePericope(state);
-	const proposition = getFlatText(pericope).get(index);
+	const proposition = getFlatText(pericope).get(action.partAfterArrowIndex);
 	ModelChanger.resetStandaloneStateOfPartAfterArrow(proposition);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Merge the given clause item with its preceeding clause item.
+ * Merge the indicated clause item with its preceeding clause item.
  * @param {PlainPericope} state - current state
- * @param {{ parent: PlainProposition, itemToMerge: PlainClauseItem }} action - object containing proposition in which to merge the given item with its prior
+ * @param {{ parentPropositionIndex: integer, itemToMergeIndex: integer }} action - object indicating the item to merge with its prior (and their parent proposition)
  * @returns {PlainPericope} new state
  * @throws {IllegalActionError} no preceeding clause item found
  */
 function mergeClauseItemWithPrior(state, action) {
-	const flatText = getFlatText(state).cacheResult();
-	const propositionIndex = indexOfClauseItemParentInSeq(flatText, action.itemToMerge);
-	const itemIndex = indexOfClauseItemInProposition(flatText.get(propositionIndex), action.itemToMerge);
 	const pericope = copyMutablePericope(state);
-	const proposition = getFlatText(pericope).get(propositionIndex);
-	ModelChanger.mergeClauseItemWithPrior(proposition, proposition.clauseItems.get(itemIndex));
+	const proposition = getFlatText(pericope).get(action.parentPropositionIndex);
+	const item = proposition.clauseItems.get(action.itemToMergeIndex);
+	ModelChanger.mergeClauseItemWithPrior(proposition, item);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Merge the given clause item with its following clause item.
+ * Merge the indicated  clause item with its following clause item.
  * @param {PlainPericope} state - current state
- * @param {{ parent: PlainProposition, itemToMerge: PlainClauseItem }} action - object containing proposition in which to merge the given item with its follower
+ * @param {{ parentPropositionIndex: integer, itemToMergeIndex: integer }} action - object indicating the item to merge with its follower (and their parent proposition)
  * @returns {PlainPericope} new state
  * @throws {IllegalActionError} no following clause item found
  */
 function mergeClauseItemWithFollower(state, action) {
-	const flatText = getFlatText(state).cacheResult();
-	const propositionIndex = indexOfClauseItemParentInSeq(flatText, action.itemToMerge);
-	const itemIndex = indexOfClauseItemInProposition(flatText.get(propositionIndex), action.itemToMerge);
 	const pericope = copyMutablePericope(state);
-	const proposition = getFlatText(pericope).get(propositionIndex);
-	ModelChanger.mergeClauseItemWithFollower(proposition, proposition.clauseItems.get(itemIndex));
+	const proposition = getFlatText(pericope).get(action.parentPropositionIndex);
+	const item = proposition.clauseItems.get(action.itemToMergeIndex);
+	ModelChanger.mergeClauseItemWithFollower(proposition, item);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Split the given clause item after the specified origin text part.
+ * Split the indicated clause item after the specified origin text part.
  * @param {PlainPericope} state - current state
- * @param {{ parent: PlainProposition, itemToSplit: PlainClauseItem, firstOriginTextPart: string }} action - object containing proposition in which to split the given item
+ * @param {{ parentPropositionIndex: integer, itemToSplitIndex: integer, firstOriginTextPart: string }} action - object indicating proposition in which to split the specified item
  * @returns {PlainPericope} new state
  */
 function splitClauseItem(state, action) {
-	const flatText = getFlatText(state).cacheResult();
-	const propositionIndex = indexOfClauseItemParentInSeq(flatText, action.itemToSplit);
-	const itemIndex = indexOfClauseItemInProposition(flatText.get(propositionIndex), action.itemToSplit);
 	const pericope = copyMutablePericope(state);
-	const proposition = getFlatText(pericope).get(propositionIndex);
-	ModelChanger.splitClauseItem(proposition, proposition.clauseItems.get(itemIndex), action.firstOriginTextPart);
+	const proposition = getFlatText(pericope).get(action.parentPropositionIndex);
+	const item = proposition.clauseItems.get(action.itemToSplitIndex);
+	ModelChanger.splitClauseItem(proposition, item, action.firstOriginTextPart);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Create a relation over the given associates by setting their roles and weights according to the specified template.
+ * Create a relation over the indicated associates by setting their roles and weights according to the specified template.
  * @param {PlainPericope} state - current state
- * @param {{ associates: Array.<(PlainRelation|PlainProposition)>, template: RelationTemplate }} action - object containing the elements to combine under new relation and applicable template
+ * @param {{ associates: Array.<({ relationIndex: integer }|{ propositionIndex: integer })>, template: RelationTempate }} action - object indicating elements to combine under new relation
  * @returns {PlainPericope} new state
  */
 function createRelation(state, action) {
-	const plainFlatRelations = getFlatRelations(state).cacheResult();
-	const plainFlatText = getFlatText(state, true).cacheResult();
 	const mutablePericope = copyMutablePericope(state);
 	const mutableFlatRelations = getFlatRelations(mutablePericope).cacheResult();
-	const mutableFlatText = getFlatText(mutablePericope, true).cacheResult();
+	const mutableFlatText = getFlatText(mutablePericope).cacheResult();
 	const mutableAssociates = action.associates.map(associate => {
-		if (associate.associates) {
-			// append respective Relation
-			return mutableFlatRelations.get(indexOfRelationInSeq(plainFlatRelations, associate));
+		if (associate.hasOwnProperty('relationIndex')) {
+			return mutableFlatRelations.get(associate.relationIndex);
 		}
-		// append respective Proposition
-		return mutableFlatText.get(indexOfPropositionInSeq(plainFlatText, associate));
+		return mutableFlatText.get(associate.propositionIndex);
 	});
 	ModelChanger.createRelation(mutableAssociates, action.template);
 	return copyPlainPericope(mutablePericope);
 }
 
 /**
- * Rotate the roles (with their weights) between all associates of the given relation, by one step from top to bottom.
+ * Rotate the roles (with their weights) between all associates of the indicated relation, by one step from top to bottom.
  * @param {PlainPericope} state - current state
- * @param {{ relation: PlainRelation }} action - object containing the relation in which to rotate all associates' roles
+ * @param {{ relationIndex: integer }} action - object indicating the relation in which to rotate all associates' roles
  * @returns {PlainPericope} new state
  */
 function rotateAssociateRoles(state, action) {
-	const relationIndex = indexOfRelationInSeq(getFlatRelations(state), action.relation);
 	const pericope = copyMutablePericope(state);
-	const relation = getFlatRelations(pericope).get(relationIndex);
+	const relation = getFlatRelations(pericope).get(action.relationIndex);
 	ModelChanger.rotateAssociateRoles(relation);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Change the given relations type according to the specified template.
+ * Change the indicated relation's type according to the specified template.
  * @param {PlainPericope} state - current state
- * @param {{ relation: PlainRelation, template: RelationTemplate }} action - object containing the relation to change and the applicable template
+ * @param {{ relationIndex: integer, template: RelationTemplate }} action - object indicating the relation to change and the applicable template
  * @returns {PlainPericope} new state
  */
 function alterRelationType(state, action) {
-	const relationIndex = indexOfRelationInSeq(getFlatRelations(state), action.relation);
 	const pericope = copyMutablePericope(state);
-	const relation = getFlatRelations(pericope).get(relationIndex);
+	const relation = getFlatRelations(pericope).get(action.relationIndex);
 	ModelChanger.alterRelationType(relation, action.template);
 	return copyPlainPericope(pericope);
 }
 
 /**
- * Remove the given relation and all super ordinated relations, thereby also cleaning up any back references from its associates.
+ * Remove the indicated relation and all super ordinated relations, thereby also cleaning up any back references from its associates.
  * @param {PlainPericope} state - current state
- * @param {{ relation: PlainRelation }} action - object containing the relation to remove
+ * @param {{ relationIndex: integer }} action - object indicating the relation to remove
  * @returns {PlainPericope} new state
  */
 function removeRelation(state, action) {
-	const relationIndex = indexOfRelationInSeq(getFlatRelations(state), action.relation);
 	const pericope = copyMutablePericope(state);
-	const relation = getFlatRelations(pericope).get(relationIndex);
+	const relation = getFlatRelations(pericope).get(action.relationIndex);
 	ModelChanger.removeRelation(relation);
 	return copyPlainPericope(pericope);
 }
@@ -329,57 +310,16 @@ function appendText(state, action) {
 }
 
 /**
- * Remove the specified propositions and their super ordinated relations.
+ * Remove the indicated propositions and their super ordinated relations.
  * Propositions must not be subordinated to others and have no child Propositions of their own.
  * @param {PlainPericope} state - current state
- * @param {{ propositions: Array.<PlainProposition> }} action - object containing the propositions to remove
+ * @param {{ propositionIndexes: Array.<integer> }} action - object indicating the propositions to remove
  * @returns {PlainPericope} new state
  */
 function removePropositions(state, action) {
-	const plainFlatText = getFlatText(state).cacheResult();
 	const pericope = copyMutablePericope(state);
 	const pericopeFlatText = getFlatText(pericope).cacheResult();
-	const propositions = action.propositions.map(prop => indexOfPropositionInSeq(plainFlatText, prop)).map(index => pericopeFlatText.get(index));
+	const propositions = [ ...action.propositionIndexes ].map(index => pericopeFlatText.get(index));
 	ModelChanger.removePropositions(pericope, propositions);
 	return copyPlainPericope(pericope);
-}
-
-/**
- * Find the index of the given proposition in the provided flat sequence.
- * @param {Seq.<(Proposition|PlainProposition)>} flatText - flat sequence of all propositions
- * @param {Proposition|PlainProposition} proposition - element to determine index for
- * @returns {integer} index of given proposition
- */
-function indexOfPropositionInSeq(flatText, proposition) {
-	return flatText.findIndex(prop => prop === proposition);
-}
-
-/**
- * Find the index of the given clause item's parent proposition in the provided flat sequence.
- * @param {Seq.<(Proposition|PlainProposition)>} flatText - flat sequence of all propositions
- * @param {ClauseItem|PlainClauseItem} clauseItem - element to determine index for
- * @returns {integer} index of given clause item's parent proposition
- */
-function indexOfClauseItemParentInSeq(flatText, clauseItem) {
-	return flatText.findIndex(prop => prop.clauseItems.some(item => item === clauseItem));
-}
-
-/**
- * Find the index of the given clause item in the given parent proposition.
- * @param {Proposition|PlainProposition} proposition - proposition to find clause item in
- * @param {ClauseItem|PlainClauseItem} clauseItem - element to determine index for
- * @returns {integer} index of given clause item in the given parent proposition
- */
-function indexOfClauseItemInProposition(proposition, clauseItem) {
-	return proposition.clauseItems.findIndex(item => item === clauseItem);
-}
-
-/**
- * Find the index of the given relation in the provided flat sequence.
- * @param {Seq.<(Relation|PlainRelation)>} flatRelations - flat sequence of all relations
- * @param {Relation|PlainRelation} relation - element to determine index for
- * @returns {integer} index of given relation
- */
-function indexOfRelationInSeq(flatRelations, relation) {
-	return flatRelations.findIndex(rel => rel === relation);
 }

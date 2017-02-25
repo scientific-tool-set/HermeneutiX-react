@@ -2,16 +2,32 @@ import * as ActionCreator from '../../src/actions/index';
 import PericopeReducer from '../../src/pericope/reducer';
 import LanguageModel from '../../src/pericope/model/languageModel';
 import SyntacticFunction from '../../src/pericope/model/syntacticFunction';
+import RelationTemplate from '../../src/pericope/model/relationTemplate';
 import AssociateRole from '../../src/pericope/model/associateRole';
 
 describe('PericopeReducer', () => {
 	let currentState, first, second, third, fourth, syntacticFunction;
 
 	beforeEach(function() {
-		first = { clauseItems: [ { originText: '1.1' }, { originText: '1.2' } ] };
-		second = { clauseItems: [ { originText: '2.1 2.2' } ] };
-		third = { clauseItems: [ { originText: '3' } ] };
-		fourth = { clauseItems: [ { originText: '4' } ] };
+		first = {
+			index: 0,
+			clauseItems: [
+				{ index: 0, parentIndex: 0, originText: '1.1' },
+				{ index: 1, parentIndex: 0, originText: '1.2' }
+			]
+		};
+		second = {
+			index: 1,
+			clauseItems: [ { index: 0, parentIndex: 1, originText: '2.1 2.2' } ]
+		};
+		third = {
+			index: 2,
+			clauseItems: [ { index: 0, parentIndex: 2, originText: '3' } ]
+		};
+		fourth = {
+			index: 3,
+			clauseItems: [ { index: 0, parentIndex: 3, originText: '4' } ]
+		};
 		first.partAfterArrow = fourth;
 		second.laterChildren = [ third ];
 		fourth.priorChildren = [ second ];
@@ -21,12 +37,19 @@ describe('PericopeReducer', () => {
 			text: [ first ],
 			connectables: [
 				{
+					index: 0,
 					associates: [
-						{ role: new AssociateRole('High', true) },
-						{ role: new AssociateRole('Low', false) }
+						{
+							index: 0,
+							role: new AssociateRole('High', true)
+						},
+						{
+							index: 1,
+							role: new AssociateRole('Low', false)
+						}
 					]
 				},
-				{ }
+				{ index: 2 }
 			]
 		};
 	});
@@ -133,27 +156,27 @@ describe('PericopeReducer', () => {
 		expect(propFour.clauseItems[0].originText).toEqual('4');
 	});
 
-	// TODO: don't skip (after fixing issue)
-	xit('on SPLIT_PROPOSITION action: cut one Proposition in two', () => {
-		const action = ActionCreator.splitProposition(first, first.clauseItems[0]);
+	it('on SPLIT_PROPOSITION action: cut one Proposition in two', () => {
+		const action = ActionCreator.splitProposition(first.clauseItems[0]);
 		const newState = PericopeReducer(currentState, action);
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(2);
 		expect(newState.text[0].clauseItems.length).toBe(1);
 		expect(newState.text[0].clauseItems[0].originText).toEqual('1.1');
+		expect(newState.text[0].partAfterArrow).toBe(undefined);
 		expect(newState.text[1].clauseItems.length).toBe(1);
 		expect(newState.text[1].clauseItems[0].originText).toEqual('1.2');
-		const propFour = newState.text[0].partAfterArrow;
-		expect(propFour.priorChildren.length).toBe(1);
-		const propTwo = propFour.priorChildren[0];
-		expect(propTwo.clauseItems.length).toBe(1);
-		expect(propTwo.clauseItems[0].originText).toEqual('2.1 2.2');
-		expect(propTwo.laterChildren.length).toBe(1);
-		expect(propTwo.laterChildren[0].clauseItems.length).toBe(1);
-		expect(propTwo.laterChildren[0].clauseItems[0].originText).toEqual('3');
-		expect(propFour.clauseItems.length).toBe(1);
-		expect(propFour.clauseItems[0].originText).toEqual('4');
+		const propFive = newState.text[1].partAfterArrow;
+		expect(propFive.priorChildren.length).toBe(1);
+		const propThree = propFive.priorChildren[0];
+		expect(propThree.clauseItems.length).toBe(1);
+		expect(propThree.clauseItems[0].originText).toEqual('2.1 2.2');
+		expect(propThree.laterChildren.length).toBe(1);
+		expect(propThree.laterChildren[0].clauseItems.length).toBe(1);
+		expect(propThree.laterChildren[0].clauseItems[0].originText).toEqual('3');
+		expect(propFive.clauseItems.length).toBe(1);
+		expect(propFive.clauseItems[0].originText).toEqual('4');
 	});
 
 	it('on RESET_STANDALONE_STATE action: make a Proposition partAfterArrow standalone', () => {
@@ -238,36 +261,63 @@ describe('PericopeReducer', () => {
 		expect(propFour.clauseItems[0].originText).toEqual('4');
 	});
 
-	xit('on CREATE_RELATION action: create a Relation', () => {
-		const action = ActionCreator.createRelation([ currentState.connectables[0], third ], /* TEMPLATE */);
+	it('on CREATE_RELATION action: create a Relation', () => {
+		const role = new AssociateRole('A', true);
+		const relation12 = currentState.connectables[0];
+		const action = ActionCreator.createRelation([ relation12, third ], new RelationTemplate(role, role, role));
 		const newState = PericopeReducer(currentState, action);
 
 		expect(newState).not.toBe(currentState);
-		// TODO: define expectations
+		expect(newState.connectables.length).toBe(1);
+		const newRelation = newState.connectables[0];
+		expect(newRelation.associates.length).toBe(2);
+		expect(newRelation.associates[0].role).toEqual(role);
+		expect(newRelation.associates[0].associates).toEqual(relation12.associates);
+		expect(newRelation.associates[1].role).toEqual(role);
+		expect(newRelation.associates[1].associates).toBe(undefined);
 	});
 
-	xit('on ROTATE_ASSOCIATE_ROLES action: rotate roles/weights of an existing Relation', () => {
-		const action = ActionCreator.rotateAssociateRoles(currentState.connectables[0]);
+	it('on ROTATE_ASSOCIATE_ROLES action: rotate roles/weights of an existing Relation', () => {
+		const oldRelation = currentState.connectables[0];
+		const action = ActionCreator.rotateAssociateRoles(oldRelation);
 		const newState = PericopeReducer(currentState, action);
 
 		expect(newState).not.toBe(currentState);
-		// TODO: define expectations
+		expect(newState.connectables.length).toBe(2);
+		const updatedRelation = newState.connectables[0];
+		expect(updatedRelation.associates.length).toBe(2);
+		expect(updatedRelation.associates[0].role).not.toEqual(oldRelation.associates[0].role);
+		expect(updatedRelation.associates[0].role).toEqual(oldRelation.associates[1].role);
+		expect(updatedRelation.associates[1].role).not.toEqual(oldRelation.associates[1].role);
+		expect(updatedRelation.associates[1].role).toEqual(oldRelation.associates[0].role);
 	});
 
-	xit('on ALTER_RELATION_TYPE action: apply new roles/weights to an existing Relation', () => {
-		const action = ActionCreator.alterRelationType(currentState.connectables[0], /* TEMPLATE */);
+	it('on ALTER_RELATION_TYPE action: apply new roles/weights to an existing Relation', () => {
+		const oldRelation = currentState.connectables[0];
+		const newRoleOne = new AssociateRole('A', false);
+		const newRoleTwo = new AssociateRole('B', true);
+		const action = ActionCreator.alterRelationType(oldRelation, new RelationTemplate(newRoleOne, null, newRoleTwo));
 		const newState = PericopeReducer(currentState, action);
 
 		expect(newState).not.toBe(currentState);
-		// TODO: define expectations
+		expect(newState.connectables.length).toBe(2);
+		const updatedRelation = newState.connectables[0];
+		expect(updatedRelation.associates.length).toBe(2);
+		expect(updatedRelation.associates[0].role).not.toEqual(oldRelation.associates[0].role);
+		expect(updatedRelation.associates[0].role).toEqual(newRoleOne);
+		expect(updatedRelation.associates[1].role).not.toEqual(oldRelation.associates[1].role);
+		expect(updatedRelation.associates[1].role).toEqual(newRoleTwo);
 	});
 
-	xit('on REMOVE_RELATION action: remove an existing Relation', () => {
+	it('on REMOVE_RELATION action: remove an existing Relation', () => {
 		const action = ActionCreator.removeRelation(currentState.connectables[0]);
 		const newState = PericopeReducer(currentState, action);
 
 		expect(newState).not.toBe(currentState);
-		// TODO: define expectations
+		expect(newState.connectables.length).toBe(3);
+		expect(newState.connectables[0].associates).toBe(undefined);
+		expect(newState.connectables[1].associates).toBe(undefined);
+		expect(newState.connectables[2].associates).toBe(undefined);
 	});
 
 	it('on PREPEND_TEXT action: add Proposition in front', () => {
@@ -317,8 +367,14 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on REMOVE_PROPOSITIONS action: remove Proposition', () => {
-		const fifth = { clauseItems: [ { originText: '5' } ] };
-		const sixth = { clauseItems: [ { originText: '6' } ] };
+		const fifth = {
+			index: 4,
+			clauseItems: [ { index: 0, parentIndex: 4, originText: '5' } ]
+		};
+		const sixth = {
+			index: 5,
+			clauseItems: [ { index: 0, parentIndex: 5, originText: '6' } ]
+		};
 		currentState.text = [ ...currentState.text, fifth, sixth ];
 		const action = ActionCreator.removePropositions([ fifth ]);
 		const newState = PericopeReducer(currentState, action);
@@ -338,6 +394,7 @@ describe('PericopeReducer', () => {
 		expect(propTwo.laterChildren[0].clauseItems[0].originText).toEqual('3');
 		expect(propFour.clauseItems.length).toBe(1);
 		expect(propFour.clauseItems[0].originText).toEqual('4');
+		expect(newState.text[1].index).toBe(4);
 		expect(newState.text[1].clauseItems.length).toBe(1);
 		expect(newState.text[1].clauseItems[0].originText).toEqual('6');
 	});

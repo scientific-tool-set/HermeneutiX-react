@@ -857,9 +857,27 @@ describe('ModelChanger', () => {
 			expect(split.clauseItems.first()).toBe(trailingItemSecond);
 			expect(first.superOrdinatedRelation).toBe(relation12);
 			expect(second.superOrdinatedRelation).toBe(relation12);
+			expect(split.superOrdinatedRelation).toBe(null);
 			// the relation not-ending at the now split proposition 2 is no longer valid and was therefore removed
 			expect(relation12.superOrdinatedRelation).toBe(null);
 			expect(third.superOrdinatedRelation).toBe(null);
+		});
+
+		it('be able to split Proposition with partAfterArrow', () => {
+			ModelChanger.mergePropositions(first, third);
+			ModelChanger.createRelation([ first, second ], defaultRelationTemplate);
+			ModelChanger.splitProposition(first, first.clauseItems.first());
+
+			expect(getFlatText(pericope).count()).toBe(6);
+			expect(pericope.text.first().partAfterArrow).toBe(null);
+			expect(pericope.text.first().clauseItems.size).toBe(1);
+			expect(pericope.text.first().clauseItems.first().originText).toEqual('1 2');
+			expect(pericope.text.get(1).partAfterArrow).toBe(third);
+			expect(pericope.text.get(1).clauseItems.size).toBe(1);
+			expect(pericope.text.get(1).clauseItems.first().originText).toEqual('3');
+			// the relation spanning over the new proposition is no longer valid and was therefore removed
+			expect(second.superOrdinatedRelation).toBe(null);
+			expect(third.partBeforeArrow).toBe(pericope.text.get(1));
 		});
 
 		it('be able to split Proposition with partAfterArrow after first part\'s last Clause Item', () => {
@@ -877,10 +895,6 @@ describe('ModelChanger', () => {
 			// the relation spanning over the now standalone proposition 3 is no longer valid and was therefore removed
 			expect(relation45.superOrdinatedRelation).toBe(null);
 			expect(second.superOrdinatedRelation).toBe(null);
-		});
-
-		xit('be able to split partBeforeArrow Proposition', () => {
-			// TODO test
 		});
 
 		it('failing to split Proposition after its last Clause Item', () => {
