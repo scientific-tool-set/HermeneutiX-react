@@ -6,12 +6,51 @@ import ClauseItem from './model/clauseItem';
 import Relation from './model/relation';
 
 /**
+ * A single ClauseItem converted to an immutable data-only structure.
+ * @typedef {object} PlainClauseItem
+ * @property {string} originText - the represented part of the origin text
+ * @property {?SyntacticFunction} syntacticFunction - th associated syntactic function with its parent proposition
+ * @property {?string} comment - additional comment text
+ */
+/**
+ * A single Proposition converted to an immutable structure without circular references (i.e. no back references to objects).
+ * @typedef {object} PlainProposition
+ * @property {?Array.<PlainProposition>} priorChildren - preceeding subordinated child propositions
+ * @property {Array.<PlainClauseItem>} clauseItems - the clause items containing the origin text
+ * @property {?string} label - a short identifier
+ * @property {?string} syntacticTranslation - associated translation from the syntactic analysis
+ * @property {?string} semanticTranslation - associated translation from the semantic analysis
+ * @property {?SyntacticFunction} syntacticFunction - syntactic function of this proposition (if it is subordinated to another one)
+ * @property {?string} comment - additional comment text
+ * @property {?Array.<PlainProposition>} laterChildren - following subordinated child propositions
+ * @property {?PlainProposition} partAfterArrow - another part of the same proposition that continues after some enclosed subordinated child propositions
+ */
+/**
+ * Representation of a non-partAfterArrow Proposition in the plain connectable subtree.
+ * @typedef {object} PlainPropositionPlaceholder
+ * @property {?AssociateRole} role - role and weight of this proposition in its super ordinated relation
+ */
+/**
+ * A single Relation converted to an immutable structure without a circular back reference to its super ordinated relation, in the plain connectable subtree.
+ * @typedef {object} PlainRelation
+ * @property {Array.<(PlainPropositionPlaceholder|PlainRelation)>} associates - contained propositions and/or relations in this one
+ * @property {?AssociateRole} role - role and weight of this relation in its super ordinated relation
+ */
+/**
+ * The object representing a plain Pericope, i.e. the one used as the state.
+ * @typedef {object} PlainPericope
+ * @property {LanguageModel} language - the associated origin text language with its name, orientation, and syntactic functions
+ * @property {Array.<PlainProposition>} text - the list of top level Propositions with their nested child Propositions and partAfterArrows
+ * @property {Array.<(PlainPropositionPlaceholder|PlainRelation)>} connectables - the list of relation sub trees filled up with placeholders for unrelated Propositions
+ */
+
+/**
  * Construct the representing propositions from the given text.
  * Each line in the given text will be represented by a single proposition.
  * Within a proposition each token separated by a tab ('\t') or by 4+ whitespaces will become a clause item.
  *
  * @param {string} originText - the origin text to be converted to a list of propositions
- * @returns {List<Proposition>} propositions extracted from text
+ * @returns {List.<Proposition>} propositions extracted from text
  */
 export function buildPropositionsFromText(originText) {
 	// split text at line breaks into propositions
@@ -26,9 +65,9 @@ export function buildPropositionsFromText(originText) {
 
 /**
  * Build a flat sequence of all propositions (including partAfterArrows) contained in the given pericope in the origin text order.
- * @param {Pericope} pericope - pericope for which to construct the flattened proposition sequence
+ * @param {Pericope|PlainPericope} pericope - pericope for which to construct the flattened proposition sequence
  * @param {boolean} [skipPartAfterArrows = false] - whether to exclude partAfterArrows from the created list
- * @returns {Seq<Proposition>} all contained propositions in the origin text order
+ * @returns {Seq.<Proposition>} all contained propositions in the origin text order
  */
 export function getFlatText(pericope, skipPartAfterArrows = false) {
 	// use a lazy Seq in order to avoid having to build the whole model as flat list if not necessary
@@ -37,10 +76,10 @@ export function getFlatText(pericope, skipPartAfterArrows = false) {
 
 /**
  * Build a flat sequence of the given proposition and all its subordinated child propositions (including their partAfterArrows) in the origin text order.
- * @param {Proposition} proposition - proposition to build flat sequence representing its hierarchical structure for
+ * @param {Proposition|PlainProposition} proposition - proposition to build flat sequence representing its hierarchical structure for
  * @param {boolean} skipPartAfterArrows - whether to exclude partAfterArrows from the created list
  * @param {boolean} isPartAfterArrow - whether the given proposition is a partAfterArrow
- * @returns {Seq<Proposition>} flat representation of the proposition's subtree
+ * @returns {Seq.<Proposition>|Seq.<PlainProposition>} flat representation of the proposition's subtree
  */
 function flattenProposition(proposition, skipPartAfterArrows, isPartAfterArrow) {
 	// use lazy Seqs in order to avoid having to build the whole model as flat list if not necessary
@@ -53,8 +92,8 @@ function flattenProposition(proposition, skipPartAfterArrows, isPartAfterArrow) 
 
 /**
  * Build a flat sequence of all relations contained in the given pericope in some deterministic order.
- * @param {Pericope} pericope - pericope for which to construct the flattened relation sequence
- * @returns {Seq<Relation>} all contained relations in a deterministic order (for identifying matching instances in independent copies of the same pericope)
+ * @param {Pericope|PlainPericope} pericope - pericope for which to construct the flattened relation sequence
+ * @returns {Seq.<Relation>|Seq.<PlainRelation>} all contained relations in a deterministic order (for identifying matching instances in independent copies of the same pericope)
  */
 export function getFlatRelations(pericope) {
 	// use a lazy Seq in order to avoid having to iterate all relation trees if not necessary
@@ -77,8 +116,8 @@ export function getFlatRelations(pericope) {
 
 /**
  * Build a flat sequence of the given relation and all its associates that are relations as well (recursively).
- * @param {Relation} relation - relation to build flat sequence representing it with all its associate relations
- * @returns {Seq<Relation>} flat representation of the relation's subtree
+ * @param {Relation|PlainRelation} relation - relation to build flat sequence representing it with all its associate relations
+ * @returns {Seq.<Relation>|Seq.<PlainRelation>} flat representation of the relation's subtree
  */
 function flattenRelation(relation) {
 	// use a lazy Seq in order to avoid having to iterate all relation trees if not necessary
@@ -131,8 +170,7 @@ export function addChildBeforeFollower(parent, childToAdd, followerProposition) 
 }
 
 /**
- * Under the given pericope or proposition (or one of its partAfterArrows),
- * insert the provided child propostion after the specified other subordinated proposition.
+ * Under the given pericope or proposition (or one of its partAfterArrows), insert the provided child propostion after the specified other subordinated proposition.
  * @param {(Pericope|Proposition)} parent - parent element to add child proposition to
  * @param {Proposition} childToAdd - proposition to subordinate under parent behind the designated priorProposition
  * @param {Proposition} priorProposition - parent's existing subordinated proposition designated to preced the new child
@@ -187,7 +225,7 @@ export function isPriorOf(reference, follower, onlyConnectables = false) {
  * Find the immediately following proposition of the given proposition/relation in the origin text.
  * @param {(Relation|Proposition)} reference - prior element
  * @param {boolean} [onlyConnectables=false] - whether to skip over proposition parts that cannot be associated with a relation
- * @returns {?Proposition} next proposition
+ * @returns {Proposition|null} next proposition
  */
 export function getFollowingProposition(reference, onlyConnectables = false) {
 	let referenceProposition = reference;
@@ -223,7 +261,7 @@ export function getFollowingProposition(reference, onlyConnectables = false) {
  * disregarding the prior proposition's own later children.
  * @param {Proposition} reference - prior proposition
  * @param {boolean} [onlyConnectables=false] - whether to skip over proposition parts that cannot be associated with a relation
- * @returns {?Proposition} next proposition
+ * @returns {Proposition|null} next proposition
  */
 function getFollowingPropositionDisregardingPriorsChildren(reference, onlyConnectables = false) {
 	let followingProposition = getFollowingPropositionOnSameOrHigherLevel(reference, onlyConnectables);
@@ -271,7 +309,7 @@ function getFollowingPropositionDisregardingPriorsChildren(reference, onlyConnec
  * Find the following proposition in the origin text, skipping any child propositions in between.
  * @param {Proposition} priorProposition - reference proposition to find the following proposition for
  * @param {boolean} [skipPartAfterArrows=false] - whether to skip over proposition parts that cannot be associated with a relation
- * @returns {?Proposition} next proposition in origin text
+ * @returns {Proposition|null} next proposition in origin text
  */
 export function getFollowingPropositionOnSameOrHigherLevel(priorProposition, skipPartAfterArrows = false) {
 	if (!skipPartAfterArrows && priorProposition.partAfterArrow) {
@@ -292,7 +330,7 @@ export function getFollowingPropositionOnSameOrHigherLevel(priorProposition, ski
  * Find the following proposition in the origin text, skipping any child or sibling propositions in between.
  * @param {Proposition} priorProposition - reference proposition to find the following proposition for
  * @param {boolean} [skipPartAfterArrows=false] - whether to skip over proposition parts that cannot be associated with a relation
- * @returns {?Proposition} next proposition in origin text
+ * @returns {Proposition|null} next proposition in origin text
  */
 function getFollowingPropositionOnHigherLevel(priorProposition, skipPartAfterArrows = false) {
 	const parent = priorProposition.parent;
@@ -336,17 +374,23 @@ function getFollowingPropositionOnHigherLevel(priorProposition, skipPartAfterArr
 	return getFollowingPropositionOnSameOrHigherLevel(parent, skipPartAfterArrows);
 }
 
+/**
+ * Create a plain and immutable copy of the given Pericope.
+ * @param {Pericope} pericope - mutable pericope to copy into a plain and immutable representation without circular references
+ * @returns {PlainPericope} plain and immutable copy without circular references
+ */
 export function copyPlainPericope(pericope) {
 	const plainPropositions = pericope.text.map(copyPlainProposition).toJS();
 	Object.freeze(plainPropositions);
 	const plainConnectables = [ ];
-	let referenceProposition = getFlatText(pericope).first();
+	const allPropositions = getFlatText(pericope).cacheResult();
+	let referenceProposition = allPropositions.first();
 	while (referenceProposition) {
 		let topMostConnectable = referenceProposition;
 		while (topMostConnectable.superOrdinatedRelation) {
 			topMostConnectable = topMostConnectable.superOrdinatedRelation;
 		}
-		plainConnectables.push(copyPlainConnectableSubtree(topMostConnectable));
+		plainConnectables.push(copyPlainConnectableSubtree(topMostConnectable, allPropositions));
 		referenceProposition = getFollowingProposition(topMostConnectable, true);
 	}
 	Object.freeze(plainConnectables);
@@ -359,6 +403,11 @@ export function copyPlainPericope(pericope) {
 	return plainPericope;
 }
 
+/**
+ * Create a mutable Pericope from the given plain and immutable one.
+ * @param {PlainPericope} plainPericope - plain and immutable pericope to copy into its mutable representation
+ * @returns {Pericope} mutable representation of the given pericope (including circular references for better mutation performance)
+ */
 export function copyMutablePericope(plainPericope) {
 	const { language, text, connectables } = plainPericope;
 	const pericope = new Pericope(text.map(copyMutableProposition), language);
@@ -373,9 +422,9 @@ export function copyMutablePericope(plainPericope) {
 }
 
 /**
- * Convert the given mutable Proposition to a plain and frozen javascript object.
- * @param {Propostion} proposition - proposition to subject to deep copying
- * @returns {object} plain and frozen representation of the given proposition
+ * Convert the given mutable Proposition into a plain and immutable object.
+ * @param {Propostion} proposition - mutable proposition to copy
+ * @returns {PlainProposition} plain and immutable representation of the given proposition
  */
 function copyPlainProposition(proposition) {
 	const propositionCopy = { };
@@ -407,6 +456,11 @@ function copyPlainProposition(proposition) {
 	return propositionCopy;
 }
 
+/**
+ * Make a mutable Proposition copy of the given immutable object.
+ * @param {PlainProposition} plainProposition - plain and immutable proposition
+ * @returns {Proposition} mutable representation of the given immutable one (including circular references for better mutation performance)
+ */
 function copyMutableProposition(plainProposition) {
 	const clauseItems = plainProposition.clauseItems.map(item => new ClauseItem(item.originText, item.syntacticFunction, item.comment));
 	const proposition = new Proposition(clauseItems);
@@ -429,21 +483,30 @@ function copyMutableProposition(plainProposition) {
 
 /**
  * Make a plain copy of the connectable sub tree represented by the given top most item. Apply itself recursively for its associates.
- * @param {Relation|Proposition} connectable - model element to copy as a plain and frozen representation for the connectables subtree
- * @returns {object} plain and frozen javascript object representing the given model element
+ * @param {Relation|Proposition} connectable - model element to copy as a plain and immutable representation for the connectables subtree
+ * @param {Seq.<Proposition>} allPropositions - list of all propositions in origin text order (to determine index of a proposition)
+ * @returns {PlainRelation|PlainPropositionPlaceholder} plain and immutable representation of the given model element
  */
-function copyPlainConnectableSubtree(connectable) {
+function copyPlainConnectableSubtree(connectable, allPropositions) {
 	const connectableCopy = { };
 	copyPropertyIfNotNull(connectable, connectableCopy, 'role');
-	if (connectable instanceof Relation) {
+	if (connectable instanceof Proposition) {
+		connectableCopy.index = allPropositions.findIndex(prop => prop === connectable);
+	} else {
 		copyPropertyIfNotNull(connectable, connectableCopy, 'comment');
-		connectableCopy.associates = connectable.associates.map(copyPlainConnectableSubtree).toJS();
+		connectableCopy.associates = connectable.associates.map(associate => copyPlainConnectableSubtree(associate, allPropositions)).toJS();
 		Object.freeze(connectableCopy.associates);
 	}
 	Object.freeze(connectableCopy);
 	return connectableCopy;
 }
 
+/**
+ * Make a mutable Relation copy of the given object or return the next entry from the provided list of Propositions.
+ * @param {PlainRelation|PlainPropositionPlaceholder} plainConnectable - immutable model element to get mutable representation for
+ * @param {Array.<Propostion>} connectablePropositions - list of connectable Propositions in origin text order (excluding partAfterArrows) - matched propositions are removed from this array
+ * @returns {Relation|Proposition} created mutable Relation or looked up mutable Proposition
+ */
 function copyMutableConnectableSubtree(plainConnectable, connectablePropositions) {
 	if (!plainConnectable.associates) {
 		// connectable is a proposition, remove it from the beginning of the proposition list and return it
@@ -459,6 +522,13 @@ function copyMutableConnectableSubtree(plainConnectable, connectablePropositions
 	return relation;
 }
 
+/**
+ * Copy the property with the given name from the originalObject to the copiedObject if the value in the originalObject is neither undefined, null, or in case of a string empty.
+ * @param {object} originalObject - object to copy property value from
+ * @param {object} copiedObject - object to copy property value to
+ * @param {string} propertyName - name of the property to copy value of
+ * @returns {void}
+ */
 function copyPropertyIfNotNull(originalObject, copiedObject, propertyName) {
 	const value = originalObject[propertyName];
 	if (value && (typeof value !== 'string' || value.length !== 0)) {

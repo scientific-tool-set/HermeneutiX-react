@@ -879,6 +879,10 @@ describe('ModelChanger', () => {
 			expect(second.superOrdinatedRelation).toBe(null);
 		});
 
+		xit('be able to split partBeforeArrow Proposition', () => {
+			// TODO test
+		});
+
 		it('failing to split Proposition after its last Clause Item', () => {
 			expect(() => ModelChanger.splitProposition(first, first.clauseItems.last()))
 					.toThrow(new IllegalActionError('Error.SplitProposition'));

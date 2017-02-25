@@ -1,22 +1,22 @@
 import { NEW_PROJECT, START_ANALYSIS, PREPEND_TEXT, APPEND_TEXT, REMOVE_PROPOSITIONS,
 		INDENT_PROPOSITION, MERGE_PROPOSITIONS, REMOVE_INDENTATION, SPLIT_PROPOSITION, RESET_STANDALONE_STATE,
 		MERGE_CLAUSE_ITEM_WITH_PRIOR, MERGE_CLAUSE_ITEM_WITH_FOLLOWER, SPLIT_CLAUSE_ITEM,
-		CREATE_RELATION, ROTATE_ASSOCIATE_ROLES, ALTER_RELATION_TYPE
-		} from '../actions/index';
+		CREATE_RELATION, ROTATE_ASSOCIATE_ROLES, ALTER_RELATION_TYPE, REMOVE_RELATION
+} from '../actions/index';
 import * as ModelChanger from './modelChanger';
 import { buildPropositionsFromText, copyPlainPericope, copyMutablePericope, getFlatText, getFlatRelations } from './modelHelper';
 import Pericope from './model/pericope';
 import LanguageModel from './model/languageModel';
 
 /**
- * A single ClauseItem converted to a frozen data-only structure.
+ * A single ClauseItem converted to an immutable data-only structure.
  * @typedef {object} PlainClauseItem
  * @property {string} originText - the represented part of the origin text
  * @property {?SyntacticFunction} syntacticFunction - th associated syntactic function with its parent proposition
  * @property {?string} comment - additional comment text
  */
 /**
- * A single Proposition converted to a frozen structure without circular references (i.e. no back references to objects).
+ * A single Proposition converted to an immutable structure without circular references (i.e. no back references to objects).
  * @typedef {object} PlainProposition
  * @property {?Array.<PlainProposition>} priorChildren - preceeding subordinated child propositions
  * @property {Array.<PlainClauseItem>} clauseItems - the clause items containing the origin text
@@ -34,7 +34,7 @@ import LanguageModel from './model/languageModel';
  * @property {?AssociateRole} role - role and weight of this proposition in its super ordinated relation
  */
 /**
- * A single Relation converted to a frozen structure without a circular back reference to its super ordinated relation, in the plain connectable subtree.
+ * A single Relation converted to an immutable structure without a circular back reference to its super ordinated relation, in the plain connectable subtree.
  * @typedef {object} PlainRelation
  * @property {Array.<(PlainPropositionPlaceholder|PlainRelation)>} associates - contained propositions and/or relations in this one
  * @property {?AssociateRole} role - role and weight of this relation in its super ordinated relation
@@ -60,7 +60,7 @@ const INITIAL_STATE = {
 /**
  * Reducer returning the new state after the given action has been applied.
  * @param {PlainPericope} state - the current state
- * @param {{type: string}} action - action to apply, additional fields can be expected depending on the action's type
+ * @param {{ type: string }} action - action to apply, additional fields can be expected depending on the action's type
  * @returns {PlainPericope} new state (potentially the old one if nothing changed)
  */
 export default function(state = INITIAL_STATE, action) {
@@ -91,6 +91,8 @@ export default function(state = INITIAL_STATE, action) {
 			return rotateAssociateRoles(state, action);
 		case ALTER_RELATION_TYPE:
 			return alterRelationType(state, action);
+		case REMOVE_RELATION:
+			return removeRelation(state, action);
 		case PREPEND_TEXT:
 			return prependText(state, action);
 		case APPEND_TEXT:
@@ -106,7 +108,7 @@ export default function(state = INITIAL_STATE, action) {
  * Subordinate the given target proposition under the specified parent and set its indentation function.
  * This may influence indentations of propositions between the given two (target and parent).
  * @param {PlainPericope} state - current state
- * @param {{target: PlainProposition, parent: PlainProposition, syntacticFunction: SyntacticFunction}} action - object containing additional payload for executing action
+ * @param {{ target: PlainProposition, parent: PlainProposition, syntacticFunction: SyntacticFunction }} action - object containing two propositions (to indent target under parent with given function)
  * @returns {PlainPericope} new state
  */
 function indentPropositionUnderParent(state, action) {
@@ -124,7 +126,7 @@ function indentPropositionUnderParent(state, action) {
 /**
  * Merge the two given propositions, which need to be the same kind of children to the same parent or at least adjacent to oneanother.
  * @param {PlainPericope} state - current state
- * @param {{propOne: PlainProposition, propTwo: PlainProposition}} action - object containing additional payload for executing action
+ * @param {{ propOne: PlainProposition, propTwo: PlainProposition }} action - object containing two propositions to merge
  * @returns {PlainPericope} new state
  */
 function mergePropositions(state, action) {
@@ -139,6 +141,13 @@ function mergePropositions(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Make the given proposition a sibling of its current parent, i.e. un-subordinate it once.
+ * @param {PlainPericope} state - current state
+ * @param {{ proposition: PlainProposition }} action - object containing proposition to move up to the same level as its parent
+ * @returns {PlainPericope} new state
+ * @throws {IllegalActionError} proposition is a top level propositions or a directly enclosed child
+ */
 function removeOneIndentation(state, action) {
 	const index = indexOfPropositionInSeq(getFlatText(state), action.proposition);
 	const pericope = copyMutablePericope(state);
@@ -147,6 +156,14 @@ function removeOneIndentation(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Split the selected proposition after the designated clause item and
+ * remove all relations that will become invalid by this change.
+ * @param {PlainPericope} state - current state
+ * @param {{ proposition: PlainProposition, lastItemInFirstPart: PlainClauseItem }} action - object containing proposition to split after designated clause item
+ * @returns {PlainPericope} new state
+ * @throws {IllegalActionError}
+ */
 function splitProposition(state, action) {
 	const flatText = getFlatText(state).cacheResult();
 	const propositionIndex = indexOfPropositionInSeq(flatText, action.proposition);
@@ -157,6 +174,12 @@ function splitProposition(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Restore the standalone state of the given proposition part.
+ * @param {PlainPericope} state - current state
+ * @param {{ partAfterArrow: PlainProposition }} action - object containing proposition part to reset to being a standalone proposition
+ * @returns {PlainPericope} new state
+ */
 function resetStandaloneStateOfPartAfterArrow(state, action) {
 	const index = indexOfPropositionInSeq(getFlatText(state), action.proposition);
 	const pericope = copyMutablePericope(state);
@@ -165,6 +188,13 @@ function resetStandaloneStateOfPartAfterArrow(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Merge the given clause item with its preceeding clause item.
+ * @param {PlainPericope} state - current state
+ * @param {{ parent: PlainProposition, itemToMerge: PlainClauseItem }} action - object containing proposition in which to merge the given item with its prior
+ * @returns {PlainPericope} new state
+ * @throws {IllegalActionError} no preceeding clause item found
+ */
 function mergeClauseItemWithPrior(state, action) {
 	const flatText = getFlatText(state).cacheResult();
 	const propositionIndex = indexOfClauseItemParentInSeq(flatText, action.itemToMerge);
@@ -175,6 +205,13 @@ function mergeClauseItemWithPrior(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Merge the given clause item with its following clause item.
+ * @param {PlainPericope} state - current state
+ * @param {{ parent: PlainProposition, itemToMerge: PlainClauseItem }} action - object containing proposition in which to merge the given item with its follower
+ * @returns {PlainPericope} new state
+ * @throws {IllegalActionError} no following clause item found
+ */
 function mergeClauseItemWithFollower(state, action) {
 	const flatText = getFlatText(state).cacheResult();
 	const propositionIndex = indexOfClauseItemParentInSeq(flatText, action.itemToMerge);
@@ -185,6 +222,12 @@ function mergeClauseItemWithFollower(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Split the given clause item after the specified origin text part.
+ * @param {PlainPericope} state - current state
+ * @param {{ parent: PlainProposition, itemToSplit: PlainClauseItem, firstOriginTextPart: string }} action - object containing proposition in which to split the given item
+ * @returns {PlainPericope} new state
+ */
 function splitClauseItem(state, action) {
 	const flatText = getFlatText(state).cacheResult();
 	const propositionIndex = indexOfClauseItemParentInSeq(flatText, action.itemToSplit);
@@ -195,6 +238,12 @@ function splitClauseItem(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Create a relation over the given associates by setting their roles and weights according to the specified template.
+ * @param {PlainPericope} state - current state
+ * @param {{ associates: Array.<(PlainRelation|PlainProposition)>, template: RelationTemplate }} action - object containing the elements to combine under new relation and applicable template
+ * @returns {PlainPericope} new state
+ */
 function createRelation(state, action) {
 	const plainFlatRelations = getFlatRelations(state).cacheResult();
 	const plainFlatText = getFlatText(state, true).cacheResult();
@@ -213,6 +262,12 @@ function createRelation(state, action) {
 	return copyPlainPericope(mutablePericope);
 }
 
+/**
+ * Rotate the roles (with their weights) between all associates of the given relation, by one step from top to bottom.
+ * @param {PlainPericope} state - current state
+ * @param {{ relation: PlainRelation }} action - object containing the relation in which to rotate all associates' roles
+ * @returns {PlainPericope} new state
+ */
 function rotateAssociateRoles(state, action) {
 	const relationIndex = indexOfRelationInSeq(getFlatRelations(state), action.relation);
 	const pericope = copyMutablePericope(state);
@@ -221,6 +276,12 @@ function rotateAssociateRoles(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Change the given relations type according to the specified template.
+ * @param {PlainPericope} state - current state
+ * @param {{ relation: PlainRelation, template: RelationTemplate }} action - object containing the relation to change and the applicable template
+ * @returns {PlainPericope} new state
+ */
 function alterRelationType(state, action) {
 	const relationIndex = indexOfRelationInSeq(getFlatRelations(state), action.relation);
 	const pericope = copyMutablePericope(state);
@@ -229,18 +290,51 @@ function alterRelationType(state, action) {
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Remove the given relation and all super ordinated relations, thereby also cleaning up any back references from its associates.
+ * @param {PlainPericope} state - current state
+ * @param {{ relation: PlainRelation }} action - object containing the relation to remove
+ * @returns {PlainPericope} new state
+ */
+function removeRelation(state, action) {
+	const relationIndex = indexOfRelationInSeq(getFlatRelations(state), action.relation);
+	const pericope = copyMutablePericope(state);
+	const relation = getFlatRelations(pericope).get(relationIndex);
+	ModelChanger.removeRelation(relation);
+	return copyPlainPericope(pericope);
+}
+
+/**
+ * Add the specified origin text as new propositions in front of the existing ones.
+ * @param {PlainPericope} state - current state
+ * @param {{ originText: string }} action - object containing the text to prepend to current state
+ * @returns {PlainPericope} new state
+ */
 function prependText(state, action) {
 	const pericope = copyMutablePericope(state);
 	ModelChanger.prependText(pericope, action.originText);
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Add the specified origin text as new propositions behind the existing ones on the given pericope.
+ * @param {PlainPericope} state - current state
+ * @param {{ originText: string }} action - object containing the text to append to current state
+ * @returns {PlainPericope} new state
+ */
 function appendText(state, action) {
 	const pericope = copyMutablePericope(state);
 	ModelChanger.appendText(pericope, action.originText);
 	return copyPlainPericope(pericope);
 }
 
+/**
+ * Remove the specified propositions and their super ordinated relations.
+ * Propositions must not be subordinated to others and have no child Propositions of their own.
+ * @param {PlainPericope} state - current state
+ * @param {{ propositions: Array.<PlainProposition> }} action - object containing the propositions to remove
+ * @returns {PlainPericope} new state
+ */
 function removePropositions(state, action) {
 	const plainFlatText = getFlatText(state).cacheResult();
 	const pericope = copyMutablePericope(state);

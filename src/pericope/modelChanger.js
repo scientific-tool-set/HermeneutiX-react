@@ -354,8 +354,7 @@ export function removeOneIndentation(proposition) {
 }
 
 /**
- * Check whether making the given proposition a sibling of its current parent
- * would require other child propositions of its parent to be un-subordinated.
+ * Check whether making the given proposition a sibling of its current parent would require other child propositions of its parent to be un-subordinated.
  * @param {Proposition} proposition - proposition to move up to the same level as its parent
  * @returns {boolean} whether other propositions would need to be un-indented
  * @throws {IllegalActionError} proposition is a top level propositions or a directly enclosed child
@@ -377,8 +376,7 @@ export function removeOneIndentationAffectsOthers(proposition) {
 }
 
 /**
- * Split the selected proposition after the designated clause item and
- * remove all relations that will become invalid by this change.
+ * Split the selected proposition after the designated clause item and remove all relations that will become invalid by this change.
  * @param {Proposition} proposition - proposition two split into two independent ones
  * @param {ClauseItem} lastItemInFirstPart - last clause item after which to split the proposition
  * @returns {void}
@@ -517,7 +515,7 @@ export function splitClauseItem(parent, itemToSplit, firstOriginTextPart) {
 
 /**
  * Create a relation over the given associates by setting their roles and weights according to the specified template.
- * @param {List<(Relation|Propostion)>|(Relation|Proposition)[]} associates - elements to combine under new super ordinated relation
+ * @param {List.<(Relation|Propostion)>|Array.<(Relation|Proposition)>} associates - elements to combine under new super ordinated relation
  * @param {RelationTemplate} template - definition of applicable roles and weights of the associates in the new relation
  * @returns {Relation} created relation over the given associates
  */
@@ -535,8 +533,7 @@ export function createRelation(associates, template) {
 }
 
 /**
- * Rotate the roles (with their weights) between all associates of the given relation,
- * by one step from top to bottom.
+ * Rotate the roles (with their weights) between all associates of the given relation, by one step from top to bottom.
  * @param {Relation} relation - relation in which to rotate all associates' roles
  * @returns {void}
  */
@@ -589,9 +586,9 @@ export function appendText(pericope, originText) {
 
 /**
  * Remove the specified propositions and their super ordinated relations from the given pericope.
- * Propositions must not be subordinated to another one and have no child Propositions of their own.
+ * Propositions must not be subordinated to other ones and have no child Propositions of their own.
  * @param {Pericope} pericope - pericope to remove given propositions from
- * @param {List<Propostion>|Proposition[]} propositionsToRemove - propositions to remove from pericope
+ * @param {List.<Propostion>|Array.<Proposition>} propositionsToRemove - propositions to remove from pericope
  * @returns {void}
  */
 export function removePropositions(pericope, propositionsToRemove) {
@@ -615,7 +612,7 @@ export function removePropositions(pericope, propositionsToRemove) {
 }
 
 /**
- * Destroy the given relation and all super ordinated relations, thereby also cleaning up any back references from its associates.
+ * Remove the given relation and all super ordinated relations, thereby also cleaning up any back references from its associates.
  * @param {Relation} relation - relation to remove
  * @returns {void}
  */
@@ -636,7 +633,7 @@ export function removeRelation(relation) {
  * @param {?string} textOne - first string to combine with the second one
  * @param {?string} textTwo - second string to combine with the first one
  * @param {string} separator - separator to insert between the other two string (only if they are both neither null nor empty)
- * @returns {?string} joined string (or the non-null/non-empty one of the two)
+ * @returns {string|null} joined string (or the non-null/non-empty one of the two)
  */
 function joinStrings(textOne, textTwo, separator) {
 	if (!textOne || textOne.length === 0) {
