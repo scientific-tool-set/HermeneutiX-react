@@ -1,4 +1,4 @@
-import * as ActionCreator from '../../src/actions/index';
+import * as Actions from '../../src/actions/index';
 import PericopeReducer from '../../src/pericope/reducer';
 import LanguageModel from '../../src/pericope/model/languageModel';
 import SyntacticFunction from '../../src/pericope/model/syntacticFunction';
@@ -71,20 +71,16 @@ describe('PericopeReducer', () => {
 		expect(PericopeReducer(currentState, action)).toBe(currentState);
 	});
 
-	it('on NEW_PROJECT action: reset to initial state', () => {
-		const action = ActionCreator.createNewProject();
-		const initialState = {
-			language: new LanguageModel('', true, [ [ ] ]),
-			text: [ ],
-			connectables: [ ]
-		};
-
-		expect(PericopeReducer(null, action)).toEqual(initialState);
-	});
-
 	it('on START_ANALYSIS action: create Pericope from origin text', () => {
-		const action = ActionCreator.startAnalysis(' 1\n 2 \n\n3.1    3.2\t3.3   \t  \n  \n4\n  ');
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.START_ANALYSIS,
+			originText: ' 1\n 2 \n\n3.1    3.2\t3.3   \t  \n  \n4\n  ',
+			languageName: 'Greek',
+			font: {
+				type: 'Courier',
+				size: 14
+			}
+		});
 
 		expect(newState.text.length).toBe(4);
 		expect(newState.text[0].clauseItems.length).toBe(1);
@@ -100,8 +96,12 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on INDENT_PROPOSITION action: indent one Proposition under another', () => {
-		const action = ActionCreator.indentPropositionUnderParent(third, fourth, syntacticFunction);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.INDENT_PROPOSITION,
+			targetIndex: 2,
+			parentIndex: 3,
+			syntacticFunction
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(1);
@@ -120,8 +120,11 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on MERGE_PROPOSITIONS action: merge one Proposition with another', () => {
-		const action = ActionCreator.mergePropositions(second, third);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.MERGE_PROPOSITIONS,
+			propOneIndex: 1,
+			propTwoIndex: 2
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(1);
@@ -138,8 +141,10 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on REMOVE_INDENTATION action: move a Proposition up by one step', () => {
-		const action = ActionCreator.removeOneIndentation(third);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.REMOVE_INDENTATION,
+			propositionIndex: 2
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(1);
@@ -157,8 +162,11 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on SPLIT_PROPOSITION action: cut one Proposition in two', () => {
-		const action = ActionCreator.splitProposition(first.clauseItems[0]);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.SPLIT_PROPOSITION,
+			propositionIndex: 0,
+			lastItemInFirstPartIndex: 0
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(2);
@@ -180,8 +188,10 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on RESET_STANDALONE_STATE action: make a Proposition partAfterArrow standalone', () => {
-		const action = ActionCreator.resetStandaloneStateOfPartAfterArrow(fourth);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.RESET_STANDALONE_STATE,
+			partAfterArrowIndex: 3
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(2);
@@ -200,8 +210,11 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on MERGE_CLAUSE_ITEM_WITH_PRIOR action: merge two clause items', () => {
-		const action = ActionCreator.mergeClauseItemWithPrior(first.clauseItems[1]);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.MERGE_CLAUSE_ITEM_WITH_PRIOR,
+			parentPropositionIndex: 0,
+			itemToMergeIndex: 1
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(1);
@@ -220,8 +233,11 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on MERGE_CLAUSE_ITEM_WITH_FOLLOWER action: merge two clause items', () => {
-		const action = ActionCreator.mergeClauseItemWithFollower(first.clauseItems[0]);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.MERGE_CLAUSE_ITEM_WITH_FOLLOWER,
+			parentPropositionIndex: 0,
+			itemToMergeIndex: 0
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(1);
@@ -240,8 +256,12 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on SPLIT_CLAUSE_ITEM action: split a Clause Item into two', () => {
-		const action = ActionCreator.splitClauseItem(second.clauseItems[0], '2.1');
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.SPLIT_CLAUSE_ITEM,
+			parentPropositionIndex: 1,
+			itemToSplitIndex: 0,
+			firstOriginTextPart: '2.1'
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(1);
@@ -264,8 +284,14 @@ describe('PericopeReducer', () => {
 	it('on CREATE_RELATION action: create a Relation', () => {
 		const role = new AssociateRole('A', true);
 		const relation12 = currentState.connectables[0];
-		const action = ActionCreator.createRelation([ relation12, third ], new RelationTemplate(role, role, role));
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.CREATE_RELATION,
+			associates: [
+				{ relationIndex: 0 },
+				{ propositionIndex: 2 }
+			],
+			template: new RelationTemplate(role, role, role)
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.connectables.length).toBe(1);
@@ -279,8 +305,10 @@ describe('PericopeReducer', () => {
 
 	it('on ROTATE_ASSOCIATE_ROLES action: rotate roles/weights of an existing Relation', () => {
 		const oldRelation = currentState.connectables[0];
-		const action = ActionCreator.rotateAssociateRoles(oldRelation);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.ROTATE_ASSOCIATE_ROLES,
+			relationIndex: 0
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.connectables.length).toBe(2);
@@ -296,8 +324,11 @@ describe('PericopeReducer', () => {
 		const oldRelation = currentState.connectables[0];
 		const newRoleOne = new AssociateRole('A', false);
 		const newRoleTwo = new AssociateRole('B', true);
-		const action = ActionCreator.alterRelationType(oldRelation, new RelationTemplate(newRoleOne, null, newRoleTwo));
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.ALTER_RELATION_TYPE,
+			relationIndex: 0,
+			template: new RelationTemplate(newRoleOne, null, newRoleTwo)
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.connectables.length).toBe(2);
@@ -310,8 +341,10 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on REMOVE_RELATION action: remove an existing Relation', () => {
-		const action = ActionCreator.removeRelation(currentState.connectables[0]);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.REMOVE_RELATION,
+			relationIndex: 0
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.connectables.length).toBe(3);
@@ -321,8 +354,10 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on PREPEND_TEXT action: add Proposition in front', () => {
-		const action = ActionCreator.prependText('0');
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.PREPEND_TEXT,
+			originText: '0'
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(2);
@@ -344,8 +379,10 @@ describe('PericopeReducer', () => {
 	});
 
 	it('on APPEND_TEXT action: add Proposition at the end', () => {
-		const action = ActionCreator.appendText('5');
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.APPEND_TEXT,
+			originText: '5'
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(2);
@@ -376,8 +413,10 @@ describe('PericopeReducer', () => {
 			clauseItems: [ { index: 0, parentIndex: 5, originText: '6' } ]
 		};
 		currentState.text = [ ...currentState.text, fifth, sixth ];
-		const action = ActionCreator.removePropositions([ fifth ]);
-		const newState = PericopeReducer(currentState, action);
+		const newState = PericopeReducer(currentState, {
+			type: Actions.REMOVE_PROPOSITIONS,
+			propositionIndexes: [ 4 ]
+		});
 
 		expect(newState).not.toBe(currentState);
 		expect(newState.text.length).toBe(2);
