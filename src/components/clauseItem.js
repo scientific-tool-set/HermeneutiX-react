@@ -7,7 +7,7 @@ class ClauseItem extends Component {
 		return (
 			<li key={index} className='clause-item'>
 				<div className='origin-text'>
-					<label>{this.props.originText}</label>
+					<label>{originText}</label>
 				</div>
 				<div className={`syntactic-function${underlined ? ' underlined' : ''}`}>
 					<label>{code}</label>
