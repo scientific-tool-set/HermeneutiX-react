@@ -1,0 +1,84 @@
+.proposition {
+	border-top: 1px #ddd solid;
+	border-left: 1px #ddd solid;
+	border-bottom: 1px #bbb solid;
+	border-right: 1px #bbb solid;
+	display: table;
+	padding: 0 .125em;
+	background-color: #fafafa;
+}
+
+.proposition-details {
+	display: table-row;
+	padding: 0 .25em;
+}
+
+.proposition-label {
+	display: table-cell;
+	padding: 0 .125em;
+	vertical-align: middle;
+	width: 5.75em;
+}
+.syntactic-translation > input,
+.proposition-label > input {
+	direction: initial;
+	width: 100%;
+}
+
+.proposition-checkbox {
+	display: table-cell;
+	vertical-align: middle;
+	padding: 0 .375em;
+}
+
+.clause-item-container {
+	display: table-cell;
+	vertical-align: middle;
+	list-style-type: none;
+	padding: 0 .25em;
+}
+
+.clause-item {
+	display: inline-block;
+	border: 1px #888 dotted;
+	margin: .5em .125em;
+}
+
+.clause-item > div {
+	text-align: center;
+	padding: .2em .5em;
+}
+
+.clause-item label {
+	border: none;
+	padding: 0;
+	margin: 0;
+}
+
+.clause-item .origin-text {
+	border-bottom: 1px #e0e0e0 solid;
+}
+
+.proposition-translation {
+	display: table-row;
+	padding: 0 .5em;
+}
+
+.checkbox-placeholder,
+.proposition-label-placeholder {
+	display: table-cell;
+}
+
+.syntactic-translation {
+	display: table-cell;
+	padding: 0 .375em .5em;
+}
+
+label {
+	font-weight: normal;
+	text-decoration: none;
+}
+
+.underlined label {
+	text-decoration: underline;
+}
