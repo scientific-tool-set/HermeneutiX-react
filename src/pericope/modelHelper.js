@@ -8,8 +8,6 @@ import Relation from './model/relation';
 /**
  * A single ClauseItem converted to an immutable data-only structure.
  * @typedef {object} PlainClauseItem
- * @property {integer} index - index of the represented clause item in its parent propostion
- * @property {integer} parentIndex - index of the parent proposition in the origin text order
  * @property {string} originText - the represented part of the origin text
  * @property {?SyntacticFunction} syntacticFunction - th associated syntactic function with its parent proposition
  * @property {?string} comment - additional comment text
@@ -444,19 +442,14 @@ export function copyMutablePericope(plainPericope) {
  * @returns {PlainProposition} plain and immutable representation of the given proposition
  */
 function copyPlainProposition(proposition, allPropositions) {
-	const propositionIndex = allPropositions.findIndex(prop => prop === proposition);
-	const propositionCopy = { index: propositionIndex };
+	const propositionCopy = { index: allPropositions.findIndex(prop => prop === proposition) };
 	if (!proposition.priorChildren.isEmpty()) {
 		propositionCopy.priorChildren = proposition.priorChildren.map(child => copyPlainProposition(child, allPropositions)).toJS();
 		Object.freeze(propositionCopy.priorChildren);
 	}
 	copyPropertyIfNotNull(proposition, propositionCopy, 'label');
-	propositionCopy.clauseItems = proposition.clauseItems.map((item, itemIndex) => {
-		const itemCopy = {
-			index: itemIndex,
-			parentIndex: propositionIndex,
-			originText: item.originText
-		};
+	propositionCopy.clauseItems = proposition.clauseItems.map(item => {
+		const itemCopy = { originText: item.originText };
 		copyPropertyIfNotNull(item, itemCopy, 'syntacticFunction');
 		copyPropertyIfNotNull(item, itemCopy, 'comment');
 		Object.freeze(itemCopy);

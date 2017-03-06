@@ -93,6 +93,33 @@ describe('PericopeReducer', () => {
 		expect(newState.text[2].clauseItems[2].originText).toEqual('3.3');
 		expect(newState.text[3].clauseItems.length).toBe(1);
 		expect(newState.text[3].clauseItems[0].originText).toEqual('4');
+		expect(newState.language).toBe(currentState.language);
+	});
+
+	it('on SET_PROPOSITION_LABEL action: update Proposition\'s label value', () => {
+		const newLabel = 'Test';
+		const newState = PericopeReducer(currentState, {
+			type: Actions.SET_PROPOSITION_LABEL,
+			propositionIndex: 1,
+			label: newLabel
+		});
+
+		expect(newState).not.toBe(currentState);
+		const secondProposition = newState.text[0].partAfterArrow.priorChildren[0];
+		expect(secondProposition.label).toEqual(newLabel);
+	});
+
+	it('on SET_SYNTACTIC_TRANSLATION action: update Proposition\'s syntactic translation value', () => {
+		const newTranslation = 'Test Translation';
+		const newState = PericopeReducer(currentState, {
+			type: Actions.SET_SYNTACTIC_TRANSLATION,
+			propositionIndex: 2,
+			translation: newTranslation
+		});
+
+		expect(newState).not.toBe(currentState);
+		const thirdProposition = newState.text[0].partAfterArrow.priorChildren[0].laterChildren[0];
+		expect(thirdProposition.syntacticTranslation).toEqual(newTranslation);
 	});
 
 	it('on INDENT_PROPOSITION action: indent one Proposition under another', () => {

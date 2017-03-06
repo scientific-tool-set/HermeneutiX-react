@@ -1,4 +1,5 @@
 import { START_ANALYSIS, PREPEND_TEXT, APPEND_TEXT, REMOVE_PROPOSITIONS,
+		SET_PROPOSITION_LABEL, SET_SYNTACTIC_TRANSLATION,
 		INDENT_PROPOSITION, MERGE_PROPOSITIONS, REMOVE_INDENTATION, SPLIT_PROPOSITION, RESET_STANDALONE_STATE,
 		MERGE_CLAUSE_ITEM_WITH_PRIOR, MERGE_CLAUSE_ITEM_WITH_FOLLOWER, SPLIT_CLAUSE_ITEM,
 		CREATE_RELATION, ROTATE_ASSOCIATE_ROLES, ALTER_RELATION_TYPE, REMOVE_RELATION
@@ -53,7 +54,7 @@ import LanguageModel from './model/languageModel';
  */
 
 /**
- * Initial state to fall back on in the beginning and to reset to on NEW_PROJECT action.
+ * Initial state to fall back on in the beginning.
  * @type {PlainPericope}
  */
 const INITIAL_STATE = {
@@ -71,7 +72,15 @@ const INITIAL_STATE = {
 export default function(state = INITIAL_STATE, action) {
 	switch (action.type) {
 		case START_ANALYSIS:
-			return copyPlainPericope(new Pericope(buildPropositionsFromText(action.originText)));
+			return copyPlainPericope(new Pericope(buildPropositionsFromText(action.originText), state.language));
+		case SET_PROPOSITION_LABEL:
+			return mutateSingleProposition(state, action, prop => {
+				prop.label = action.label;
+			});
+		case SET_SYNTACTIC_TRANSLATION:
+			return mutateSingleProposition(state, action, prop => {
+				prop.syntacticTranslation = action.translation;
+			});
 		case INDENT_PROPOSITION:
 			return indentPropositionUnderParent(state, action);
 		case MERGE_PROPOSITIONS:
@@ -105,6 +114,20 @@ export default function(state = INITIAL_STATE, action) {
 		default:
 			return state;
 	}
+}
+
+/**
+ * Change some value of a single proposition without any structural changes.
+ * @param {PlainPericope} state - current state
+ * @param {object} action - object indicating the proposition to change (and what to change)
+ * @param {integer} action.propositionIndex - index of the single proposition to change
+ * @param {func} mutate - change to execute, expecting a single Proposition as parameter
+ * @returns {PlainPericope} new state
+ */
+function mutateSingleProposition(state, action, mutate) {
+	const pericope = copyMutablePericope(state);
+	mutate(getFlatText(pericope).get(action.propositionIndex));
+	return copyPlainPericope(pericope);
 }
 
 /**

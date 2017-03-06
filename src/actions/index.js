@@ -1,4 +1,7 @@
 export const START_ANALYSIS = 'START_ANALYSIS';
+export const TOGGLE_PROPOSITION_SELECTION = 'TOGGLE_PROPOSITION_SELECTION';
+export const SET_PROPOSITION_LABEL = 'SET_PROPOSITION_LABEL';
+export const SET_SYNTACTIC_TRANSLATION = 'SET_SYNTACTIC_TRANSLATION';
 export const INDENT_PROPOSITION = 'INDENT_PROPOSITION';
 export const MERGE_PROPOSITIONS = 'MERGE_PROPOSITIONS';
 export const REMOVE_INDENTATION = 'REMOVE_INDENTATION';
@@ -21,7 +24,10 @@ export const REMOVE_PROPOSITIONS = 'REMOVE_PROPOSITIONS';
  * @param {object} payload - repective content to include as contextual information in the action
  * @returns {{ type: string }} created action
  */
-const createAction = (type, payload = {}) => ({ type, ...payload });
+const createAction = (type, payload = {}) => ({
+	type,
+	...payload
+});
 
 /**
  * Action Creator: Start analysis of pericope based on the given origin text.
@@ -32,190 +38,196 @@ const createAction = (type, payload = {}) => ({ type, ...payload });
  * @param {integer} font.size - font size to apply when displaying origin text
  * @returns {{ type: string, originText: string, languageName: string, font: { type: string, size: integer } }} created action
  */
-export const startAnalysis = (originText, languageName, font) => {
-	return createAction(START_ANALYSIS, {
-		originText,
-		languageName,
-		font
-	});
-};
+export const startAnalysis = (originText, languageName, font) => createAction(START_ANALYSIS, {
+	originText,
+	languageName,
+	font
+});
+
+/**
+ * Action Creator: Select/unselect the indicated proposition.
+ * @param {integer} propositionIndex - index of the proposition in origin text order
+ * @returns {{ type: string, propositionIndex: integer }} created action
+ */
+export const togglePropositionSelection = propositionIndex => createAction(TOGGLE_PROPOSITION_SELECTION, {
+	propositionIndex
+});
+
+/**
+ * Action Creator: Change the indicated proposition's label.
+ * @param {integer} propositionIndex - index of the proposition in origin text order
+ * @param {string} label - new label to set
+ * @returns {{ type: string, propositionIndex: integer, label: string }} created action
+ */
+export const setPropositionLabel = (propositionIndex, label) => createAction(SET_PROPOSITION_LABEL, {
+	propositionIndex,
+	label
+});
+
+/**
+ * Action Creator: Change the indicated proposition's syntactic translation.
+ * @param {integer} propositionIndex - index of the proposition in origin text order
+ * @param {string} translation - new syntactic translation to set
+ * @returns {{ type: string, propositionIndex: integer, translation: string }} created action
+ */
+export const setSyntacticTranslation = (propositionIndex, translation) => createAction(SET_SYNTACTIC_TRANSLATION, {
+	propositionIndex,
+	translation
+});
 
 /**
  * Action Creator: Subordinate the given target proposition under the specified parent and set its indentation function.
  * This may influence indentations of propositions between the given two (target and parent).
- * @param {{ index: integer }} target - proposition to subordinate under parent
- * @param {{ index: integer }} parent - proposition to subordinate target to
+ * @param {integer} targetIndex - index of the proposition to subordinate under parent
+ * @param {integer} parentIndex - index of the proposition to subordinate target to
  * @param {SyntacticFunction} syntacticFunction - indentation function to set for target
  * @returns {{ action: string, targetIndex: integer, parentIndex: integer, syntacticFunction: SyntacticFunction }} created action
  */
-export const indentPropositionUnderParent = (target, parent, syntacticFunction) => {
-	return createAction(INDENT_PROPOSITION, {
-		targetIndex: target.index,
-		parentIndex: parent.index,
-		syntacticFunction
-	});
-};
+export const indentPropositionUnderParent = (targetIndex, parentIndex, syntacticFunction) => createAction(INDENT_PROPOSITION, {
+	targetIndex,
+	parentIndex,
+	syntacticFunction
+});
 
 /**
  * Action Creator: Merge the two given propositions, which need to be the same kind of children to the same parent or at least adjacent to oneanother.
- * @param {{ index: integer }} propOne - one proposition to merge with the other
- * @param {{ index: integer }} propTwo - other proposition to merge with the one
+ * @param {integer} propOneIndex - index of one proposition to merge with the other
+ * @param {integer} propTwoIndex - index of other proposition to merge with the one
  * @returns {{ action: string, propOneIndex: integer, propTwoIndex: integer }} created action
  */
-export const mergePropositions = (propOne, propTwo) => {
-	return createAction(MERGE_PROPOSITIONS, {
-		propOneIndex: propOne.index,
-		propTwoIndex: propTwo.index
-	});
-};
+export const mergePropositions = (propOneIndex, propTwoIndex) => createAction(MERGE_PROPOSITIONS, {
+	propOneIndex,
+	propTwoIndex
+});
 
 /**
  * Action Creator: Make the given proposition a sibling of its current parent, i.e. un-subordinate it once.
- * @param {{ index: integer }} proposition - proposition to move up to the same level as its parent
+ * @param {integer} propositionIndex - proposition to move up to the same level as its parent
  * @returns {{ action: string, propositionIndex: integer }} created action
  */
-export const removeOneIndentation = proposition => {
-	return createAction(REMOVE_INDENTATION, {
-		propositionIndex: proposition.index
-	});
-};
+export const removeOneIndentation = propositionIndex => createAction(REMOVE_INDENTATION, {
+	propositionIndex
+});
 
 /**
- * Action Creator: Split the item's parent proposition after the designated clause item and remove all relations that will become invalid by this change.
- * @param {{ index: integer, parentIndex: integer }} lastItemInFirstPart - last clause item after which to split the proposition
+ * Action Creator: Split the indicated proposition after the designated clause item and remove all relations that will become invalid by this change.
+ * @param {integer} propositionIndex - index of the proposition to split
+ * @param {integer} lastItemInFirstPartIndex - index of the last clause item after which to split the proposition
  * @returns {{ action: string, propositionIndex: integer, lastItemInFirstPartIndex: integer }} created action
  */
-export const splitProposition = (lastItemInFirstPart) => {
-	return createAction(SPLIT_PROPOSITION, {
-		propositionIndex: lastItemInFirstPart.parentIndex,
-		lastItemInFirstPartIndex: lastItemInFirstPart.index
-	});
-};
+export const splitProposition = (propositionIndex, lastItemInFirstPartIndex) => createAction(SPLIT_PROPOSITION, {
+	propositionIndex,
+	lastItemInFirstPartIndex
+});
 
 /**
  * Action Creator: Restore the standalone state of the given proposition part.
- * @param {{ index: integer }} partAfterArrow - proposition part to revert into connectable proposition
+ * @param {integer} partAfterArrowIndex - index of the proposition part to revert into a connectable proposition
  * @returns {{ action: string, partAfterArrowIndex: integer }} created action
  */
-export const resetStandaloneStateOfPartAfterArrow = partAfterArrow => {
-	return createAction(RESET_STANDALONE_STATE, {
-		partAfterArrowIndex: partAfterArrow.index
-	});
-};
+export const resetStandaloneStateOfPartAfterArrow = partAfterArrowIndex => createAction(RESET_STANDALONE_STATE, {
+	partAfterArrowIndex
+});
 
 /**
- * Action Creator: Merge the given clause item with its preceeding clause item.
- * @param {{ index: integer, parentIndex: integer }} itemToMerge - trailing clause item to merge
+ * Action Creator: Merge the indicated clause item with its preceeding clause item.
+ * @param {integer} parentPropositionIndex - index of the clause item's parent proposition
+ * @param {integer} itemToMergeIndex - index of the clause item to merge
  * @returns {{ action: string, parentPropositionIndex: integer, itemToMergeIndex: integer }} created action
  */
-export const mergeClauseItemWithPrior = itemToMerge => {
-	return createAction(MERGE_CLAUSE_ITEM_WITH_PRIOR, {
-		parentPropositionIndex: itemToMerge.parentIndex,
-		itemToMergeIndex: itemToMerge.index
-	});
-};
+export const mergeClauseItemWithPrior = (parentPropositionIndex, itemToMergeIndex) => createAction(MERGE_CLAUSE_ITEM_WITH_PRIOR, {
+	parentPropositionIndex,
+	itemToMergeIndex
+});
 
 /**
  * Action Creator: Merge the given clause item with its following clause item.
- * @param {{ index: integer, parentIndex: integer }} itemToMerge - leading clause item to merge
+ * @param {integer} parentPropositionIndex - index of the clause item's parent proposition
+ * @param {integer} itemToMergeIndex - index of the clause item to merge
  * @returns {{ action: string, parentPropositionIndex: integer, itemToMergeIndex: integer }} created action
  */
-export const mergeClauseItemWithFollower = itemToMerge => {
-	return createAction(MERGE_CLAUSE_ITEM_WITH_FOLLOWER, {
-		parentPropositionIndex: itemToMerge.parentIndex,
-		itemToMergeIndex: itemToMerge.index
-	});
-};
+export const mergeClauseItemWithFollower = (parentPropositionIndex, itemToMergeIndex) => createAction(MERGE_CLAUSE_ITEM_WITH_FOLLOWER, {
+	parentPropositionIndex,
+	itemToMergeIndex
+});
 
 /**
  * Split the given clause item after the specified origin text part.
- * @param {{ index: integer, parentIndex: integer }} itemToSplit - clause item to split into two
+ * @param {integer} parentPropositionIndex - index of the clause item's parent proposition
+ * @param {integer} itemToSplitIndex - index of the clause item to split into two
  * @param {string} firstOriginTextPart - leading part of the origin text after which to split the clause item into two
  * @returns {{ action: string, parentPropositionIndex: integer, itemToSplitIndex: integer, firstOriginTextPart: string }} created action
  */
-export const splitClauseItem = (itemToSplit, firstOriginTextPart) => {
-	return createAction(SPLIT_CLAUSE_ITEM, {
-		parentPropositionIndex: itemToSplit.parentIndex,
-		itemToSplitIndex: itemToSplit.index,
-		firstOriginTextPart
-	});
-};
+export const splitClauseItem = (parentPropositionIndex, itemToSplitIndex, firstOriginTextPart) => createAction(SPLIT_CLAUSE_ITEM, {
+	parentPropositionIndex,
+	itemToSplitIndex,
+	firstOriginTextPart
+});
 
 /**
  * Action Creator: Create a relation over the given associates by setting their roles and weights according to the specified template.
- * @param {Array.<({ index: integer, associates: Array.<object> }|{ index: integer })>} associates - elements to combine under new super ordinated relation
+ * @param {Array.<({ relationIndex: integer }|{ propositionIndex: integer })>} associates - elements to combine under new super ordinated relation
  * @param {RelationTemplate} template - definition of applicable roles and weights of the associates in the new relation
  * @returns {{ action: string, associates: Array.<({ relationIndex: integer }|{ propositionIndex: integer })>, template: RelationTempate }} created action
  */
-export const createRelation = (associates, template) => {
-	return createAction(CREATE_RELATION, {
-		associates: [ ...associates ].map(element => {
-			if (element.hasOwnProperty('associates')) {
-				return { relationIndex: element.index };
-			}
-			return { propositionIndex: element.index };
-		}),
-		template
-	});
-};
+export const createRelation = (associates, template) => createAction(CREATE_RELATION, {
+	associates: [ ...associates ],
+	template
+});
 
 /**
  * Action Creator: Rotate the roles (with their weights) between all associates of the given relation, by one step from top to bottom.
- * @param {{ index: integer }} relation - relation in which to rotate all associates' roles
+ * @param {integer} relationIndex - index of the relation in which to rotate all associates' roles
  * @returns {{ action: string, relationIndex: integer }} created action
  */
-export const rotateAssociateRoles = relation => {
-	return createAction(ROTATE_ASSOCIATE_ROLES, {
-		relationIndex: relation.index
-	});
-};
+export const rotateAssociateRoles = relationIndex => createAction(ROTATE_ASSOCIATE_ROLES, {
+	relationIndex
+});
 
 /**
  * Action Creator: Change the given relations type according to the specified template.
- * @param {{ index: integer }} relation - relation to change the type of
+ * @param {integer} relationIndex - index of the relation to change the type of
  * @param {RelationTempate} template - new relation type to apply
  * @returns {{ action: string, relationIndex: integer, template: RelationTempate }} created action
  */
-export const alterRelationType = (relation, template) => {
-	return createAction(ALTER_RELATION_TYPE, {
-		relationIndex: relation.index,
-		template
-	});
-};
+export const alterRelationType = (relationIndex, template) => createAction(ALTER_RELATION_TYPE, {
+	relationIndex,
+	template
+});
 
 /**
  * Action Creator: Remove the given relation and all super ordinated relations.
- * @param {{ index: integer }} relation - relation to remove
- * @returns {{ action: string, relation: Relation }} created action
+ * @param {integer} relationIndex - index of the relation to remove
+ * @returns {{ action: string, relationIndex: integer }} created action
  */
-export const removeRelation = relation => {
-	return createAction(REMOVE_RELATION, {
-		relationIndex: relation.index
-	});
-};
+export const removeRelation = relationIndex => createAction(REMOVE_RELATION, {
+	relationIndex
+});
 
 /**
  * Action Creator: Add the specified origin text as new propositions in front of the existing ones.
  * @param {string} originText - origin text to prepend
  * @returns {{ action: string, originText: string }} created action
  */
-export const prependText = originText => createAction(PREPEND_TEXT, { originText });
+export const prependText = originText => createAction(PREPEND_TEXT, {
+	originText
+});
 
 /**
  * Action Creator: Add the specified origin text as new propositions behind the existing ones.
  * @param {string} originText - origin text to append
  * @returns {{ action: string, originText: string }} created action
  */
-export const appendText = originText => createAction(APPEND_TEXT, { originText });
+export const appendText = originText => createAction(APPEND_TEXT, {
+	originText
+});
 
 /**
  * Action Creator: Remove the specified propositions and their super ordinated relations.
  * Propositions must not be subordinated to other ones and have no child Propositions of their own.
- * @param {Array.<{ index: integer }>} propositions - propositions to remove from pericope
+ * @param {Array.<{ integer }>} propositionIndexes - indexes of propositions to remove from pericope
  * @returns {{ action: string, propositionIndexes: Array.<integer> }} created action
  */
-export const removePropositions = propositions => {
-	return createAction(REMOVE_PROPOSITIONS, {
-		propositionIndexes: [ ...propositions ].map(prop => prop.index)
-	});
-};
+export const removePropositions = propositionIndexes => createAction(REMOVE_PROPOSITIONS, {
+	propositionIndexes: [ ...propositionIndexes ]
+});

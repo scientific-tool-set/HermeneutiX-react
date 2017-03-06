@@ -16,11 +16,39 @@ describe('ActionCreator', () => {
 		expect(action.font).toEqual(font);
 	});
 
+	it('create TOGGLE_PROPOSITION_SELECTION action', () => {
+		const index = 1;
+		const action = ActionCreator.togglePropositionSelection(index);
+
+		expect(action.type).toEqual(ActionCreator.TOGGLE_PROPOSITION_SELECTION);
+		expect(action.propositionIndex).toBe(index);
+	});
+
+	it('create SET_PROPOSITION_LABEL action', () => {
+		const index = 1;
+		const label = 'Test';
+		const action = ActionCreator.setPropositionLabel(index, label);
+
+		expect(action.type).toEqual(ActionCreator.SET_PROPOSITION_LABEL);
+		expect(action.propositionIndex).toBe(index);
+		expect(action.label).toEqual(label);
+	});
+
+	it('create SET_SYNTACTIC_TRANSLATION action', () => {
+		const index = 1;
+		const syntacticTranslation = 'Translation Text';
+		const action = ActionCreator.setSyntacticTranslation(index, syntacticTranslation);
+
+		expect(action.type).toEqual(ActionCreator.SET_SYNTACTIC_TRANSLATION);
+		expect(action.propositionIndex).toBe(index);
+		expect(action.translation).toEqual(syntacticTranslation);
+	});
+
 	it('create INDENT_PROPOSITION action', () => {
 		const targetIndex = 1;
 		const parentIndex = 2;
 		const syntacticFunction = new SyntacticFunction('F', 'SomeFunction');
-		const action = ActionCreator.indentPropositionUnderParent({ index: targetIndex }, { index: parentIndex }, syntacticFunction);
+		const action = ActionCreator.indentPropositionUnderParent(targetIndex, parentIndex, syntacticFunction);
 
 		expect(action.type).toEqual(ActionCreator.INDENT_PROPOSITION);
 		expect(action.targetIndex).toBe(targetIndex);
@@ -31,7 +59,7 @@ describe('ActionCreator', () => {
 	it('create MERGE_PROPOSITIONS action', () => {
 		const propOneIndex = 1;
 		const propTwoIndex = 2;
-		const action = ActionCreator.mergePropositions({ index: propOneIndex }, { index: propTwoIndex });
+		const action = ActionCreator.mergePropositions(propOneIndex, propTwoIndex);
 
 		expect(action.type).toEqual(ActionCreator.MERGE_PROPOSITIONS);
 		expect(action.propOneIndex).toBe(propOneIndex);
@@ -40,7 +68,7 @@ describe('ActionCreator', () => {
 
 	it('create REMOVE_INDENTATION action', () => {
 		const propositionIndex = 1;
-		const action = ActionCreator.removeOneIndentation({ index: propositionIndex });
+		const action = ActionCreator.removeOneIndentation(propositionIndex);
 
 		expect(action.type).toEqual(ActionCreator.REMOVE_INDENTATION);
 		expect(action.propositionIndex).toBe(propositionIndex);
@@ -49,7 +77,7 @@ describe('ActionCreator', () => {
 	it('create SPLIT_PROPOSITION action', () => {
 		const propositionIndex = 1;
 		const itemIndex = 2;
-		const action = ActionCreator.splitProposition({ parentIndex: propositionIndex, index: itemIndex });
+		const action = ActionCreator.splitProposition(propositionIndex, itemIndex);
 
 		expect(action.type).toEqual(ActionCreator.SPLIT_PROPOSITION);
 		expect(action.propositionIndex).toBe(propositionIndex);
@@ -58,7 +86,7 @@ describe('ActionCreator', () => {
 
 	it('create RESET_STANDALONE_STATE action', () => {
 		const propositionIndex = 1;
-		const action = ActionCreator.resetStandaloneStateOfPartAfterArrow({ index: propositionIndex });
+		const action = ActionCreator.resetStandaloneStateOfPartAfterArrow(propositionIndex);
 
 		expect(action.type).toEqual(ActionCreator.RESET_STANDALONE_STATE);
 		expect(action.partAfterArrowIndex).toBe(propositionIndex);
@@ -67,7 +95,7 @@ describe('ActionCreator', () => {
 	it('create MERGE_CLAUSE_ITEM_WITH_PRIOR action', () => {
 		const propositionIndex = 1;
 		const itemIndex = 2;
-		const action = ActionCreator.mergeClauseItemWithPrior({ parentIndex: propositionIndex, index: itemIndex });
+		const action = ActionCreator.mergeClauseItemWithPrior(propositionIndex, itemIndex);
 
 		expect(action.type).toEqual(ActionCreator.MERGE_CLAUSE_ITEM_WITH_PRIOR);
 		expect(action.parentPropositionIndex).toBe(propositionIndex);
@@ -77,7 +105,7 @@ describe('ActionCreator', () => {
 	it('create MERGE_CLAUSE_ITEM_WITH_FOLLOWER action', () => {
 		const propositionIndex = 1;
 		const itemIndex = 2;
-		const action = ActionCreator.mergeClauseItemWithFollower({ parentIndex: propositionIndex, index: itemIndex });
+		const action = ActionCreator.mergeClauseItemWithFollower(propositionIndex, itemIndex);
 
 		expect(action.type).toEqual(ActionCreator.MERGE_CLAUSE_ITEM_WITH_FOLLOWER);
 		expect(action.parentPropositionIndex).toBe(propositionIndex);
@@ -88,7 +116,7 @@ describe('ActionCreator', () => {
 		const propositionIndex = 1;
 		const itemIndex = 2;
 		const firstOriginTextPart = 'Word';
-		const action = ActionCreator.splitClauseItem({ parentIndex: propositionIndex, index: itemIndex }, firstOriginTextPart);
+		const action = ActionCreator.splitClauseItem(propositionIndex, itemIndex, firstOriginTextPart);
 
 		expect(action.type).toEqual(ActionCreator.SPLIT_CLAUSE_ITEM);
 		expect(action.parentPropositionIndex).toBe(propositionIndex);
@@ -104,10 +132,10 @@ describe('ActionCreator', () => {
 		const role = new AssociateRole('A', true);
 		const template = new RelationTemplate(role, role, role);
 		const action = ActionCreator.createRelation([
-			{ index: propositionIndexOne },
-			{ index: relationIndexTwo, associates: [] },
-			{ index: propositionIndexThree },
-			{ index: relationIndexFour, associates: [] }
+			{ propositionIndex: propositionIndexOne },
+			{ relationIndex: relationIndexTwo },
+			{ propositionIndex: propositionIndexThree },
+			{ relationIndex: relationIndexFour }
 		], template);
 
 		expect(action.type).toEqual(ActionCreator.CREATE_RELATION);
@@ -121,7 +149,7 @@ describe('ActionCreator', () => {
 
 	it('create ROTATE_ASSOCIATE_ROLES action', () => {
 		const relationIndex = 1;
-		const action = ActionCreator.rotateAssociateRoles({ index: relationIndex });
+		const action = ActionCreator.rotateAssociateRoles(relationIndex);
 
 		expect(action.type).toEqual(ActionCreator.ROTATE_ASSOCIATE_ROLES);
 		expect(action.relationIndex).toBe(relationIndex);
@@ -131,7 +159,7 @@ describe('ActionCreator', () => {
 		const relationIndex = 1;
 		const role = new AssociateRole('A', true);
 		const template = new RelationTemplate(role, role, role);
-		const action = ActionCreator.alterRelationType({ index: relationIndex }, template);
+		const action = ActionCreator.alterRelationType(relationIndex, template);
 
 		expect(action.type).toEqual(ActionCreator.ALTER_RELATION_TYPE);
 		expect(action.relationIndex).toBe(relationIndex);
@@ -140,7 +168,7 @@ describe('ActionCreator', () => {
 
 	it('create REMOVE_RELATION action', () => {
 		const relationIndex = 1;
-		const action = ActionCreator.removeRelation({ index: relationIndex });
+		const action = ActionCreator.removeRelation(relationIndex);
 
 		expect(action.type).toEqual(ActionCreator.REMOVE_RELATION);
 		expect(action.relationIndex).toBe(relationIndex);
@@ -168,10 +196,10 @@ describe('ActionCreator', () => {
 		const propositionIndexThree = 4;
 		const propositionIndexFour = 5;
 		const action = ActionCreator.removePropositions([
-			{ index: propositionIndexOne },
-			{ index: propositionIndexTwo },
-			{ index: propositionIndexThree },
-			{ index: propositionIndexFour }
+			propositionIndexOne,
+			propositionIndexTwo,
+			propositionIndexThree,
+			propositionIndexFour
 		]);
 
 		expect(action.type).toEqual(ActionCreator.REMOVE_PROPOSITIONS);
